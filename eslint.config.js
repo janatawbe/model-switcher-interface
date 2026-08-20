@@ -6,7 +6,9 @@ import tseslint from 'typescript-eslint'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist']),
+  // server/ is a separate Node/Express package with its own package.json,
+  // tsconfig, and toolchain -- not part of this Vite/browser project.
+  globalIgnores(['dist', 'server']),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [
