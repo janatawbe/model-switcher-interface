@@ -1,7 +1,6 @@
 import { useState } from "react";
 import type { Message } from "./types/chat";
 import { ChatLayout } from "./components/layout/ChatLayout";
-import { MODELS } from "./components/ui/models";
 
 const FAKE_REPLIES = [
   "This is a demo response.",
@@ -11,10 +10,12 @@ const FAKE_REPLIES = [
 
 function App() {
   const [messages, setMessages] = useState<Message[]>([]);
-  const [selectedModel, setSelectedModel] = useState<string>(MODELS[0].id);
+  const [selectedModel, setSelectedModel] = useState<string | null>(null);
   const [isTyping, setIsTyping] = useState(false);
 
   const handleSendMessage = (content: string) => {
+    if (!selectedModel) return;
+
     const userMessage: Message = {
       id: crypto.randomUUID(),
       role: "user",

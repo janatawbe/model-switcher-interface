@@ -1,17 +1,23 @@
 import { useState, type KeyboardEvent } from "react";
-import { Send } from "lucide-react";
+import { motion } from "motion/react";
+import { ArrowUp } from "lucide-react";
+import { getModel } from "../ui/models";
+import { glass } from "../ui/theme";
 
 type MessageInputProps = {
+  selectedModel: string | null;
   onSend: (content: string) => void;
   disabled?: boolean;
 };
 
-export function MessageInput({ onSend, disabled }: MessageInputProps) {
+export function MessageInput({ selectedModel, onSend, disabled }: MessageInputProps) {
   const [value, setValue] = useState("");
+  const [focused, setFocused] = useState(false);
+  const model = getModel(selectedModel);
 
   const submit = () => {
     const trimmed = value.trim();
-    if (!trimmed || disabled) return;
+    if (!trimmed || disabled || !selectedModel) return;
     onSend(trimmed);
     setValue("");
   };
@@ -23,25 +29,42 @@ export function MessageInput({ onSend, disabled }: MessageInputProps) {
     }
   };
 
+  const canSend = Boolean(value.trim()) && !disabled && selectedModel !== null;
+
   return (
-    <div className="shrink-0 border-t border-neutral-200 px-6 py-4">
-      <div className="flex items-end gap-3 rounded-2xl border border-neutral-200 bg-white px-4 py-3 focus-within:border-neutral-400">
+    <div className="shrink-0 px-6 py-4">
+      <div
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        className={`flex items-end gap-3 rounded-2xl ${glass.raised} px-4 py-3 ring-0 transition-[box-shadow,border-color] duration-300 focus-within:border-white/[0.16] focus-within:ring-4 ${model?.accent.focusRing ?? ""} ${focused ? model?.accent.glow ?? "" : ""}`}
+      >
         <textarea
           value={value}
           onChange={(event) => setValue(event.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Message the assistant..."
+          placeholder={selectedModel ? "Ask anything..." : "Choose a model to begin..."}
           rows={1}
-          className="max-h-40 flex-1 resize-none bg-transparent text-sm text-neutral-800 outline-none placeholder:text-neutral-400"
+          aria-label="Message"
+          className="max-h-40 flex-1 resize-none bg-transparent text-[15px] text-neutral-100 outline-none placeholder:text-neutral-500"
         />
-        <button
+        {model && (
+          <span className={`hidden select-none text-xs font-medium tracking-wide transition-colors duration-300 sm:inline ${model.accent.text}`}>
+            {model.label.toUpperCase()}
+          </span>
+        )}
+        <motion.button
           type="button"
           onClick={submit}
-          disabled={!value.trim() || disabled}
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-neutral-900 text-white transition-colors disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-400"
+          disabled={!canSend}
+          aria-label="Send message"
+          whileTap={canSend ? { scale: 0.9 } : undefined}
+          transition={{ duration: 0.1 }}
+          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-colors disabled:cursor-not-allowed disabled:bg-white/[0.05] disabled:text-neutral-600 ${
+            canSend ? (model?.accent.solidButton ?? "bg-white/10 text-neutral-100") : "bg-white/[0.05] text-neutral-500"
+          }`}
         >
-          <Send size={15} />
-        </button>
+          <ArrowUp size={16} strokeWidth={2.25} />
+        </motion.button>
       </div>
     </div>
   );
