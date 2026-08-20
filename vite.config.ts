@@ -8,4 +8,12 @@ export default defineConfig({
     react(),
     tailwindcss(),
   ],
+  server: {
+    // The frontend only ever calls our own /api/*; this forwards those
+    // dev-server requests to the Express backend so the app never needs
+    // to hardcode a backend origin (and never talks to OpenRouter itself).
+    proxy: {
+      '/api': 'http://localhost:3000',
+    },
+  },
 })
