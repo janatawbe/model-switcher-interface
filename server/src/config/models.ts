@@ -12,22 +12,19 @@ export type ModelRegistryEntry = {
 // The frontend only ever knows about gpt/gemini/claude; everything below
 // this point is server-only and never sent to the browser.
 //
-// For $0 development, all three currently resolve to OpenRouter's own
-// "openrouter/free" router (a free-model router OpenRouter provides for
-// exactly this purpose -- verified live against
-// https://openrouter.ai/api/v1/models before wiring it in). To go live
-// with the real per-provider models later, swap only the
-// `openRouterModel` values below -- e.g.:
-//   gpt    -> "openai/gpt-5.1"
-//   gemini -> "google/gemini-3-pro"
-//   claude -> "anthropic/claude-opus-4.5"
-// No other file needs to change.
+// gpt is wired to a specific, real, free OpenAI model (Milestone 4).
+// gemini/claude still resolve to OpenRouter's own "openrouter/free" router
+// (a free-model router OpenRouter provides for exactly this purpose) as a
+// $0 placeholder pending Milestone 5. All model IDs here were verified
+// live against https://openrouter.ai/api/v1/models before wiring them in
+// -- to go live with real per-provider models later, swap only the
+// `openRouterModel` values below. No other file needs to change.
 export const MODEL_REGISTRY: Record<ModelId, ModelRegistryEntry> = {
   gpt: {
     id: "gpt",
     displayName: "GPT",
-    description: "OpenAI's GPT model.",
-    openRouterModel: "openrouter/free",
+    description: "OpenAI's open-weight gpt-oss-20b model, served free via OpenRouter.",
+    openRouterModel: "openai/gpt-oss-20b:free",
   },
   gemini: {
     id: "gemini",
