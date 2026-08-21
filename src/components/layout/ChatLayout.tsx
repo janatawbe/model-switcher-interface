@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import type { Message } from "../../types/chat";
+import type { Conversation, Message } from "../../types/chat";
 import { EmptyState } from "../chat/EmptyState";
 import { MessageInput } from "../chat/MessageInput";
 import { MessageList } from "../chat/MessageList";
@@ -16,6 +16,9 @@ type ChatLayoutProps = {
   onSelectModel: (modelId: string) => void;
   onNewChat: () => void;
   onSendMessage: (content: string) => void;
+  conversations: Conversation[];
+  activeConversationId: string | null;
+  onSelectConversation: (conversationId: string) => void;
 };
 
 // No model chosen yet is a completely different experience from an active
@@ -29,6 +32,9 @@ export function ChatLayout({
   onSelectModel,
   onNewChat,
   onSendMessage,
+  conversations,
+  activeConversationId,
+  onSelectConversation,
 }: ChatLayoutProps) {
   const hasMessages = messages.length > 0;
   const [previewModel, setPreviewModel] = useState<string | null>(null);
@@ -58,7 +64,12 @@ export function ChatLayout({
           <Aurora activeModel={selectedModel} previewModel={previewModel} />
 
           <div className="relative z-10 flex h-full w-full">
-            <Sidebar onNewChat={onNewChat} />
+            <Sidebar
+              onNewChat={onNewChat}
+              conversations={conversations}
+              activeConversationId={activeConversationId}
+              onSelectConversation={onSelectConversation}
+            />
 
             <div className="flex min-w-0 flex-1 flex-col">
               <ChatHeader

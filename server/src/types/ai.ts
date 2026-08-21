@@ -71,10 +71,15 @@ export type AppError = {
 export class ApiError extends Error {
   code: ErrorCode;
   status: number;
+  // ISO-8601 timestamp for when a rate limit is expected to clear. Only
+  // ever set for AI_RATE_LIMITED, and only when OpenRouter itself supplied
+  // a reset time -- never estimated or guessed client- or server-side.
+  resetAt?: string;
 
-  constructor(code: ErrorCode, message: string, status: number) {
+  constructor(code: ErrorCode, message: string, status: number, resetAt?: string) {
     super(message);
     this.code = code;
     this.status = status;
+    this.resetAt = resetAt;
   }
 }

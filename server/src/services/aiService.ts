@@ -126,7 +126,36 @@ async function callOpenRouter(apiKey: string, openRouterModel: string, messages:
   }
 
   const { code, message } = classifyFailure(lastStatus);
-  throw new ApiError(code, message, 502);
+  const resetAt = lastStatus === 429 ? extractRateLimitResetAt(lastBody) : undefined;
+  throw new ApiError(code, message, 502, resetAt);
+}
+
+// OpenRouter's free-tier daily quota (limit_source: "openrouter_free_tier_daily")
+// echoes its own rate-limit headers back inside the error body, including a
+// millisecond epoch reset time -- documented and referenced by name in the
+// same error's own remedy_hint ("see X-RateLimit-Reset"), so it's a signal
+// OpenRouter itself vouches for, not something we're inferring. Other 429
+// causes (e.g. a specific provider's shared-pool throttling) don't carry
+// this field, and in that case this deliberately returns undefined rather
+// than guessing -- no Retry-After header exists on any OpenRouter response,
+// confirmed by inspecting the raw response headers directly.
+function extractRateLimitResetAt(body: string): string | undefined {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(body);
+  } catch {
+    return undefined;
+  }
+
+  const raw = (parsed as { error?: { metadata?: { headers?: Record<string, string> } } })?.error?.metadata?.headers?.[
+    "X-RateLimit-Reset"
+  ];
+  if (!raw) return undefined;
+
+  const resetMs = Number(raw);
+  if (!Number.isFinite(resetMs) || resetMs <= Date.now()) return undefined;
+
+  return new Date(resetMs).toISOString();
 }
 
 // The application-level entry point: route handlers call this and never

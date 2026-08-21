@@ -21,7 +21,9 @@ app.use("/api", chatRouter);
 // stack trace or internal details.
 const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
   if (err instanceof ApiError) {
-    res.status(err.status).json({ error: { code: err.code, message: err.message } });
+    res.status(err.status).json({
+      error: { code: err.code, message: err.message, ...(err.resetAt ? { resetAt: err.resetAt } : {}) },
+    });
     return;
   }
 
