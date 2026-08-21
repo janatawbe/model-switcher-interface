@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AnimatePresence } from "motion/react";
 import type { Conversation, Message } from "./types/chat";
 import { ChatLayout } from "./components/layout/ChatLayout";
@@ -131,7 +131,22 @@ function App() {
   // persisting yet, so it lives here rather than as a Conversation until
   // the first message materializes one (see handleSendMessage).
   const [draftModel, setDraftModel] = useState<string | null>(null);
-  const [isTyping, setIsTyping] = useState(false);
+  // Which conversations currently have a request in flight -- keyed by
+  // conversation id rather than a single flag, since a request keeps
+  // running in the background after the user switches away from it (see
+  // requestAssistantReply), and a later-finishing unrelated request must
+  // never be able to clear the loading indicator for whichever
+  // conversation happens to be active *now*. The visible "isTyping" below
+  // is just membership of the currently active conversation in this set,
+  // so switching to/from a conversation always reflects its own real
+  // in-flight status with no manual bookkeeping needed elsewhere.
+  const [pendingConversationIds, setPendingConversationIds] = useState<Set<string>>(new Set());
+  // Mirrors pendingConversationIds but read/written synchronously, purely
+  // to reject a second send for the same conversation (or the same draft)
+  // that arrives before React has re-rendered with the disabled input --
+  // e.g. a rapid double Enter/click in the same tick. State updates alone
+  // can't guarantee that render has happened yet; this ref can.
+  const sendGuardRef = useRef<Set<string>>(new Set());
   // A model the user picked while a conversation was already in progress --
   // held here until they confirm, rather than switched immediately, so an
   // in-progress chat is never silently reattributed to a different model.
@@ -140,6 +155,7 @@ function App() {
   const activeConversation = conversations.find((c) => c.id === activeConversationId) ?? null;
   const selectedModel = activeConversation?.model ?? draftModel;
   const messages = activeConversation?.messages ?? [];
+  const isTyping = activeConversationId !== null && pendingConversationIds.has(activeConversationId);
 
   // The only place conversations are written to localStorage -- fires
   // when the conversation set or the active id actually changes, not on
@@ -157,8 +173,101 @@ function App() {
     );
   };
 
-  const handleSendMessage = async (content: string) => {
+  // The only place that actually talks to the backend. `history` is
+  // whatever should be sent as context AND is the exact array the
+  // resulting assistant/error message gets appended onto -- callers
+  // (send and retry) are responsible for making sure it ends with the
+  // one user message this request is answering, so a retry that reuses
+  // this with the same history can never duplicate that user message.
+  // Always writes into `conversationId` specifically (never "whichever
+  // conversation is active when this resolves"), so switching
+  // conversations or models while this is in flight can't misattribute
+  // the eventual response -- if conversationId was since deleted,
+  // appendToConversation's map simply matches nothing and this becomes a
+  // harmless no-op.
+  const requestAssistantReply = async (conversationId: string, model: string, history: Message[]) => {
+    setPendingConversationIds((prev) => new Set(prev).add(conversationId));
+
+    // Only reassigned once we've actually classified a response from our
+    // own backend -- any other failure (network error, timeout, unreadable
+    // JSON, etc.) leaves this at the safe, generic default.
+    let userFacingMessage = "Something went wrong reaching the model. Please try again.";
+
+    try {
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model,
+          // Error notices are excluded: they're a local UI notice, not
+          // something the model actually said, and sending them back as
+          // context would make the model think it produced that text itself.
+          messages: history.filter((message) => !message.isError).map(({ role, content }) => ({ role, content })),
+        }),
+      });
+
+      if (!response.ok) {
+        // The chat bubble only ever shows a short, honest category message
+        // (see describeFailure) -- the full detail a developer needs to
+        // diagnose a model-specific failure goes to the console, not the UI.
+        const errorBody = (await response.json().catch(() => null)) as ChatApiErrorBody | null;
+        console.error("Chat request failed:", response.status, errorBody);
+        userFacingMessage = describeFailure(errorBody?.error?.code, model, errorBody?.error?.resetAt);
+        throw new Error("Chat request failed");
+      }
+
+      const data = (await response.json()) as ChatApiResponse;
+
+      // The backend already rejects an empty/unparseable model reply as
+      // its own classified failure before this ever gets a 200 -- this is
+      // just the last line of defense against a genuinely malformed
+      // response shape, so a missing/blank message.content still can't
+      // slip through as a fabricated empty assistant bubble.
+      if (!data.message || typeof data.message.content !== "string" || !data.message.content.trim()) {
+        console.error("Chat response had an unexpected shape:", data);
+        throw new Error("Malformed chat response");
+      }
+
+      const assistantMessage: Message = {
+        id: crypto.randomUUID(),
+        role: "assistant",
+        content: data.message.content,
+        model: data.message.model,
+        createdAt: new Date().toISOString(),
+      };
+      appendToConversation(conversationId, [...history, assistantMessage]);
+    } catch (error) {
+      console.error("Failed to get a response:", error);
+      const errorMessage: Message = {
+        id: crypto.randomUUID(),
+        role: "assistant",
+        content: userFacingMessage,
+        model,
+        createdAt: new Date().toISOString(),
+        isError: true,
+      };
+      appendToConversation(conversationId, [...history, errorMessage]);
+    } finally {
+      setPendingConversationIds((prev) => {
+        const next = new Set(prev);
+        next.delete(conversationId);
+        return next;
+      });
+    }
+  };
+
+  const handleSendMessage = (content: string) => {
     if (!selectedModel) return;
+
+    // Guards against a second send landing before React has re-rendered
+    // the disabled input -- a plain state check can't catch a same-tick
+    // double Enter/click since the state update that would disable the
+    // UI hasn't been applied yet. Keyed on the conversation about to
+    // receive this message (or a shared sentinel while still a draft,
+    // since a draft has no id of its own until the request below starts).
+    const guardKey = activeConversationId ?? "__draft__";
+    if (sendGuardRef.current.has(guardKey)) return;
+    sendGuardRef.current.add(guardKey);
 
     const userMessage: Message = {
       id: crypto.randomUUID(),
@@ -195,60 +304,33 @@ function App() {
       appendToConversation(conversationId, history);
     }
 
-    setIsTyping(true);
+    void requestAssistantReply(conversationId, selectedModel, history).finally(() => {
+      sendGuardRef.current.delete(guardKey);
+    });
+  };
 
-    // Only reassigned once we've actually classified a response from our
-    // own backend -- any other failure (network error, unreadable JSON,
-    // etc.) leaves this at the safe, generic default.
-    let userFacingMessage = "Something went wrong reaching the model. Please try again.";
+  // Replaces a failed request's error bubble in place rather than
+  // appending alongside it -- `history` here is everything up to and
+  // including the original user message (the error bubble itself is
+  // excluded), so the retried request's result lands right where the
+  // error was, and the triggering user message is never duplicated.
+  const handleRetryMessage = (errorMessageId: string) => {
+    if (!activeConversation || !selectedModel) return;
+    if (sendGuardRef.current.has(activeConversation.id)) return;
 
-    try {
-      const response = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: selectedModel,
-          // Error notices are excluded: they're a local UI notice, not
-          // something the model actually said, and sending them back as
-          // context would make the model think it produced that text itself.
-          messages: history.filter((message) => !message.isError).map(({ role, content }) => ({ role, content })),
-        }),
-      });
+    const errorIndex = activeConversation.messages.findIndex((m) => m.id === errorMessageId);
+    if (errorIndex <= 0) return;
+    const triggerMessage = activeConversation.messages[errorIndex - 1];
+    if (triggerMessage.role !== "user") return;
 
-      if (!response.ok) {
-        // The chat bubble only ever shows a short, honest category message
-        // (see describeFailure) -- the full detail a developer needs to
-        // diagnose a model-specific failure goes to the console, not the UI.
-        const errorBody = (await response.json().catch(() => null)) as ChatApiErrorBody | null;
-        console.error("Chat request failed:", response.status, errorBody);
-        userFacingMessage = describeFailure(errorBody?.error?.code, selectedModel, errorBody?.error?.resetAt);
-        throw new Error("Chat request failed");
-      }
+    const history = activeConversation.messages.slice(0, errorIndex);
+    appendToConversation(activeConversation.id, history);
 
-      const data = (await response.json()) as ChatApiResponse;
-
-      const assistantMessage: Message = {
-        id: crypto.randomUUID(),
-        role: "assistant",
-        content: data.message.content,
-        model: data.message.model,
-        createdAt: new Date().toISOString(),
-      };
-      appendToConversation(conversationId, [...history, assistantMessage]);
-    } catch (error) {
-      console.error("Failed to send message:", error);
-      const errorMessage: Message = {
-        id: crypto.randomUUID(),
-        role: "assistant",
-        content: userFacingMessage,
-        model: selectedModel,
-        createdAt: new Date().toISOString(),
-        isError: true,
-      };
-      appendToConversation(conversationId, [...history, errorMessage]);
-    } finally {
-      setIsTyping(false);
-    }
+    const conversationId = activeConversation.id;
+    sendGuardRef.current.add(conversationId);
+    void requestAssistantReply(conversationId, selectedModel, history).finally(() => {
+      sendGuardRef.current.delete(conversationId);
+    });
   };
 
   // Leaves the current conversation (already persisted, since it can only
@@ -259,15 +341,17 @@ function App() {
     if (activeConversationId === null) return;
     setDraftModel(activeConversation?.model ?? null);
     setActiveConversationId(null);
-    setIsTyping(false);
   };
 
+  // isTyping is derived from pendingConversationIds, so switching here
+  // automatically shows/hides loading correctly for wherever we land --
+  // no manual reset needed, and (unlike a manual reset) it can't hide a
+  // genuinely still-running request if the user switches back.
   const handleSelectConversation = (conversationId: string) => {
     if (conversationId === activeConversationId) return;
     setPendingModel(null);
     setDraftModel(null);
     setActiveConversationId(conversationId);
-    setIsTyping(false);
   };
 
   // A pure metadata edit -- doesn't touch updatedAt, so renaming a
@@ -294,7 +378,6 @@ function App() {
     );
     setActiveConversationId(nextActive?.id ?? null);
     setDraftModel(null);
-    setIsTyping(false);
     setPendingModel(null);
   };
 
@@ -317,7 +400,6 @@ function App() {
     if (!pendingModel) return;
     setDraftModel(pendingModel);
     setActiveConversationId(null);
-    setIsTyping(false);
     setPendingModel(null);
   };
 
@@ -332,6 +414,7 @@ function App() {
         onSelectModel={requestModelSwitch}
         onNewChat={handleNewChat}
         onSendMessage={handleSendMessage}
+        onRetryMessage={handleRetryMessage}
         conversations={conversations}
         activeConversationId={activeConversationId}
         onSelectConversation={handleSelectConversation}

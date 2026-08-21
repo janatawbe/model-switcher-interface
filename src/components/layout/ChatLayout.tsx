@@ -16,6 +16,7 @@ type ChatLayoutProps = {
   onSelectModel: (modelId: string) => void;
   onNewChat: () => void;
   onSendMessage: (content: string) => void;
+  onRetryMessage: (messageId: string) => void;
   conversations: Conversation[];
   activeConversationId: string | null;
   onSelectConversation: (conversationId: string) => void;
@@ -34,6 +35,7 @@ export function ChatLayout({
   onSelectModel,
   onNewChat,
   onSendMessage,
+  onRetryMessage,
   conversations,
   activeConversationId,
   onSelectConversation,
@@ -98,7 +100,12 @@ export function ChatLayout({
                       transition={{ duration: 0.15 }}
                       className="h-full"
                     >
-                      <MessageList messages={messages} isTyping={isTyping} selectedModel={selectedModel} />
+                      <MessageList
+                        messages={messages}
+                        isTyping={isTyping}
+                        selectedModel={selectedModel}
+                        onRetryMessage={onRetryMessage}
+                      />
                     </motion.div>
                   ) : (
                     <motion.div

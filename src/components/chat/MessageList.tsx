@@ -8,9 +8,10 @@ type MessageListProps = {
   messages: Message[];
   isTyping: boolean;
   selectedModel: string | null;
+  onRetryMessage: (messageId: string) => void;
 };
 
-export function MessageList({ messages, isTyping, selectedModel }: MessageListProps) {
+export function MessageList({ messages, isTyping, selectedModel, onRetryMessage }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const model = getModel(selectedModel);
   const ModelIcon = model?.icon;
@@ -26,6 +27,8 @@ export function MessageList({ messages, isTyping, selectedModel }: MessageListPr
           key={message.id}
           message={message}
           grouped={index > 0 && messages[index - 1].role === message.role}
+          onRetry={message.isError ? () => onRetryMessage(message.id) : undefined}
+          retryDisabled={isTyping}
         />
       ))}
 
