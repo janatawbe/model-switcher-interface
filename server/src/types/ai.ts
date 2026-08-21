@@ -40,9 +40,10 @@ export type AIServiceResponse = {
   message: ChatMessage;
 };
 
-// AI_RATE_LIMITED / AI_PROVIDER_UNAVAILABLE / AI_AUTH_ERROR are the
-// specific categories the AI service classifies a failed OpenRouter
-// response into (by HTTP status); AI_REQUEST_FAILED remains the fallback
+// AI_RATE_LIMITED / AI_PROVIDER_UNAVAILABLE / AI_AUTH_ERROR /
+// AI_MODEL_UNAVAILABLE are the specific categories the AI service
+// classifies a failed OpenRouter response into (by HTTP status);
+// AI_REQUEST_FAILED remains the fallback
 // for anything that doesn't fit one of those (network failures, unusual
 // statuses) -- the frontend maps each of these to a distinct, honest
 // user-facing message and only falls back to a generic one for this last
@@ -56,6 +57,7 @@ export type ErrorCode =
   | "AI_RATE_LIMITED"
   | "AI_PROVIDER_UNAVAILABLE"
   | "AI_AUTH_ERROR"
+  | "AI_MODEL_UNAVAILABLE"
   | "AI_REQUEST_FAILED"
   | "INVALID_AI_RESPONSE"
   | "INTERNAL_ERROR";

@@ -48,6 +48,17 @@ function classifyFailure(status: number): { code: ErrorCode; message: string } {
       message: "There's a configuration issue reaching the model provider.",
     };
   }
+  if (status === 404) {
+    // OpenRouter returns this when the requested model has no active
+    // provider endpoint to route to right now -- distinct from a rate
+    // limit (the request wasn't throttled, there's just nowhere to send
+    // it) and not worth retrying, since a missing route doesn't resolve
+    // itself in the few seconds a retry would wait.
+    return {
+      code: "AI_MODEL_UNAVAILABLE",
+      message: "The selected model has no available provider right now.",
+    };
+  }
   if (status >= 500) {
     return {
       code: "AI_PROVIDER_UNAVAILABLE",
