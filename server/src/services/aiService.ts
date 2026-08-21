@@ -26,6 +26,16 @@ type OpenRouterChatResponse = {
 const MAX_ATTEMPTS = 3;
 const RETRY_DELAY_MS = 1000;
 
+// Bounds how long the UI can ever be stuck "thinking" -- without this, a
+// stalled connection (TCP handshake completes but OpenRouter never
+// responds) would hang this fetch, and therefore the frontend's loading
+// state, indefinitely. 45s comfortably clears real observed response
+// times for the slower reasoning-heavy free models while still giving up
+// well before a user would reasonably wonder if the app is broken. Not
+// retried -- a stall is a "something's actually wrong" signal, not the
+// same "try again in a moment" case a 429 is.
+const REQUEST_TIMEOUT_MS = 45000;
+
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -88,6 +98,9 @@ async function callOpenRouter(apiKey: string, openRouterModel: string, messages:
   let lastBody = "";
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    const timeoutController = new AbortController();
+    const timeoutId = setTimeout(() => timeoutController.abort(), REQUEST_TIMEOUT_MS);
+
     let response: Response;
     try {
       response = await fetch(OPENROUTER_CHAT_URL, {
@@ -99,10 +112,19 @@ async function callOpenRouter(apiKey: string, openRouterModel: string, messages:
           "X-Title": "AI Model Switcher",
         },
         body: JSON.stringify({ model: openRouterModel, messages }),
+        signal: timeoutController.signal,
       });
     } catch (networkError) {
-      console.error(`[aiService] network error calling OpenRouter for "${openRouterModel}":`, networkError);
+      const isTimeout = networkError instanceof Error && networkError.name === "AbortError";
+      console.error(
+        isTimeout
+          ? `[aiService] request to OpenRouter for "${openRouterModel}" timed out after ${REQUEST_TIMEOUT_MS}ms`
+          : `[aiService] network error calling OpenRouter for "${openRouterModel}":`,
+        isTimeout ? "" : networkError,
+      );
       throw new ApiError("AI_REQUEST_FAILED", "Unable to reach OpenRouter. Please try again.", 502);
+    } finally {
+      clearTimeout(timeoutId);
     }
 
     if (response.ok) return response;

@@ -1,14 +1,19 @@
 import { motion } from "motion/react";
-import { User } from "lucide-react";
+import { RotateCcw, User } from "lucide-react";
 import type { Message } from "../../types/chat";
 import { getModel } from "../ui/models";
 
 type MessageBubbleProps = {
   message: Message;
   grouped: boolean;
+  // Only meaningful (and only rendered) for an error bubble -- retrying a
+  // normal assistant reply isn't a thing, so this is left undefined for
+  // every other message.
+  onRetry?: () => void;
+  retryDisabled?: boolean;
 };
 
-export function MessageBubble({ message, grouped }: MessageBubbleProps) {
+export function MessageBubble({ message, grouped, onRetry, retryDisabled }: MessageBubbleProps) {
   const isUser = message.role === "user";
   const model = getModel(message.model);
   const ModelIcon = model?.icon;
@@ -50,6 +55,18 @@ export function MessageBubble({ message, grouped }: MessageBubbleProps) {
         >
           {message.content}
         </div>
+
+        {onRetry && (
+          <button
+            type="button"
+            onClick={onRetry}
+            disabled={retryDisabled}
+            className="flex items-center gap-1 px-1 text-xs font-medium text-neutral-400 transition-colors hover:text-neutral-200 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:text-neutral-400"
+          >
+            <RotateCcw size={11} />
+            Retry
+          </button>
+        )}
       </div>
     </motion.div>
   );
