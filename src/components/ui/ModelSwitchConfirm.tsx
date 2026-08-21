@@ -85,20 +85,25 @@ export function ModelSwitchConfirm({ fromModelId, toModelId, onConfirm, onCancel
           be cleared from view.
         </p>
 
-        <div className="mt-5 flex items-center gap-2.5">
+        {/* items-stretch + matching flex-centering inside each button
+            guarantees identical size for both regardless of label length --
+            "Keep {model}" is reliably one line while the confirm label can
+            wrap on narrower models' names, which previously left the two
+            buttons visually mismatched in height. */}
+        <div className="mt-5 flex items-stretch gap-2.5">
           <button
             type="button"
             onClick={onCancel}
-            className={`flex-1 rounded-xl ${glass.raised} px-4 py-2.5 text-sm font-medium text-neutral-200 transition-colors hover:bg-white/[0.08]`}
+            className={`flex min-h-[44px] flex-1 items-center justify-center rounded-xl ${glass.raised} px-4 text-center text-sm font-medium leading-tight text-neutral-200 transition-colors hover:bg-white/[0.08]`}
           >
             Keep {fromModel.label}
           </button>
           <button
             type="button"
             onClick={onConfirm}
-            className={`flex-1 rounded-xl px-4 py-2.5 text-sm font-medium transition-colors ${toModel.accent.solidButton}`}
+            className={`flex min-h-[44px] flex-1 items-center justify-center rounded-xl px-4 text-center text-sm font-medium leading-tight transition-colors ${toModel.accent.solidButton}`}
           >
-            Switch & Start New Chat
+            Switch & New Chat
           </button>
         </div>
       </motion.div>
