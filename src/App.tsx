@@ -29,6 +29,8 @@ function describeFailure(code: string | undefined, modelId: string): string {
       return `${label} is temporarily rate-limited by its provider. Please try again in a moment.`;
     case "AI_PROVIDER_UNAVAILABLE":
       return `${label}'s provider is temporarily unavailable due to high demand. Please try again shortly.`;
+    case "AI_MODEL_UNAVAILABLE":
+      return `${label} is temporarily unavailable right now. Please try again later or choose a different model.`;
     case "AI_AUTH_ERROR":
     case "MISSING_API_KEY":
       return `There's a configuration issue reaching ${label} right now. Please try again later.`;
@@ -71,7 +73,15 @@ function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           model: selectedModel,
-          messages: history.map(({ role, content }) => ({ role, content })),
+          // Explicitly built from `history` (existing messages + the
+          // message just created above), not from the `messages` state
+          // variable -- state updates are async, so re-reading `messages`
+          // here could still see the pre-send value and either drop the
+          // new message or, after a re-render, send it twice. Error
+          // notices are excluded: they're a local UI notice, not something
+          // the model actually said, and sending them back as context
+          // would make the model think it produced that text itself.
+          messages: history.filter((message) => !message.isError).map(({ role, content }) => ({ role, content })),
         }),
       });
 
@@ -103,6 +113,7 @@ function App() {
         content: userFacingMessage,
         model: selectedModel,
         createdAt: new Date().toISOString(),
+        isError: true,
       };
       setMessages((prev) => [...prev, errorMessage]);
     } finally {
