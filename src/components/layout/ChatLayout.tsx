@@ -19,6 +19,8 @@ type ChatLayoutProps = {
   conversations: Conversation[];
   activeConversationId: string | null;
   onSelectConversation: (conversationId: string) => void;
+  onRenameConversation: (conversationId: string, newTitle: string) => void;
+  onDeleteConversation: (conversationId: string) => void;
 };
 
 // No model chosen yet is a completely different experience from an active
@@ -35,9 +37,13 @@ export function ChatLayout({
   conversations,
   activeConversationId,
   onSelectConversation,
+  onRenameConversation,
+  onDeleteConversation,
 }: ChatLayoutProps) {
   const hasMessages = messages.length > 0;
   const [previewModel, setPreviewModel] = useState<string | null>(null);
+  const activeConversation = conversations.find((c) => c.id === activeConversationId) ?? null;
+  const conversationTitle = activeConversation?.title || "New Conversation";
 
   return (
     <AnimatePresence mode="wait">
@@ -69,10 +75,13 @@ export function ChatLayout({
               conversations={conversations}
               activeConversationId={activeConversationId}
               onSelectConversation={onSelectConversation}
+              onRenameConversation={onRenameConversation}
+              onDeleteConversation={onDeleteConversation}
             />
 
             <div className="flex min-w-0 flex-1 flex-col">
               <ChatHeader
+                title={conversationTitle}
                 selectedModel={selectedModel}
                 onSelectModel={onSelectModel}
                 onPreviewModel={setPreviewModel}

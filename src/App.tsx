@@ -81,6 +81,27 @@ function describeFailure(code: string | undefined, modelId: string, resetAt?: st
   }
 }
 
+const MAX_TITLE_LENGTH = 60;
+
+// Derives a short sidebar title from the first user message, entirely
+// locally (no model call). Deliberately just cleans and truncates rather
+// than attempting a semantic rewrite -- a regex-based "rewrite" would
+// mangle arbitrary phrasing/grammar unpredictably, which is worse than a
+// faithful (if plain) excerpt of what the user actually typed.
+function generateTitle(rawContent: string): string {
+  const cleaned = rawContent.replace(/\s+/g, " ").trim();
+  if (!cleaned) return "New Conversation";
+  if (cleaned.length <= MAX_TITLE_LENGTH) return cleaned;
+
+  const truncated = cleaned.slice(0, MAX_TITLE_LENGTH);
+  const lastSpace = truncated.lastIndexOf(" ");
+  // Only break on a word boundary if it doesn't throw away most of the
+  // budget -- otherwise a title with one long leading word would get cut
+  // down to almost nothing.
+  const boundary = lastSpace > 20 ? truncated.slice(0, lastSpace) : truncated;
+  return `${boundary.trimEnd()}…`;
+}
+
 // Read once, synchronously, on module init -- both pieces of restored
 // state (the conversations and which one was active) come from the same
 // snapshot, and a conversation only ever gets created once it has at
@@ -161,7 +182,7 @@ function App() {
       const now = new Date().toISOString();
       const newConversation: Conversation = {
         id: conversationId,
-        title: content.slice(0, 60),
+        title: generateTitle(content),
         model: selectedModel,
         messages: history,
         createdAt: now,
@@ -249,6 +270,34 @@ function App() {
     setIsTyping(false);
   };
 
+  // A pure metadata edit -- doesn't touch updatedAt, so renaming a
+  // conversation never reorders the sidebar (matching how it behaves in
+  // most chat apps: only actual conversation activity moves it). Empty or
+  // whitespace-only titles are rejected rather than silently accepted.
+  const handleRenameConversation = (conversationId: string, newTitle: string) => {
+    const cleaned = newTitle.replace(/\s+/g, " ").trim();
+    if (!cleaned) return;
+    setConversations((prev) => prev.map((c) => (c.id === conversationId ? { ...c, title: cleaned } : c)));
+  };
+
+  const handleDeleteConversation = (conversationId: string) => {
+    const remaining = conversations.filter((c) => c.id !== conversationId);
+    setConversations(remaining);
+
+    if (conversationId !== activeConversationId) return;
+
+    // Deleted the active conversation -- land on the next most recently
+    // updated survivor, or the true Welcome screen if none are left.
+    const nextActive = remaining.reduce<Conversation | null>(
+      (latest, c) => (!latest || c.updatedAt > latest.updatedAt ? c : latest),
+      null,
+    );
+    setActiveConversationId(nextActive?.id ?? null);
+    setDraftModel(null);
+    setIsTyping(false);
+    setPendingModel(null);
+  };
+
   // The single gate every model-select action passes through (the header
   // dropdown and the welcome screen's cards both just call this, unchanged).
   // Switching is only ever immediate when there's nothing to lose yet --
@@ -286,6 +335,8 @@ function App() {
         conversations={conversations}
         activeConversationId={activeConversationId}
         onSelectConversation={handleSelectConversation}
+        onRenameConversation={handleRenameConversation}
+        onDeleteConversation={handleDeleteConversation}
       />
       <AnimatePresence>
         {pendingModel && selectedModel && (
