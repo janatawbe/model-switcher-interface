@@ -1,7 +1,9 @@
 import { useState } from "react";
+import { AnimatePresence } from "motion/react";
 import type { Message } from "./types/chat";
 import { ChatLayout } from "./components/layout/ChatLayout";
 import { getModelLabel } from "./components/ui/models";
+import { ModelSwitchConfirm } from "./components/ui/ModelSwitchConfirm";
 
 type ChatApiResponse = {
   message: {
@@ -39,6 +41,10 @@ function App() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [selectedModel, setSelectedModel] = useState<string | null>(null);
   const [isTyping, setIsTyping] = useState(false);
+  // A model the user picked while a conversation was already in progress --
+  // held here until they confirm, rather than switched immediately, so an
+  // in-progress chat is never silently reattributed to a different model.
+  const [pendingModel, setPendingModel] = useState<string | null>(null);
 
   const handleSendMessage = async (content: string) => {
     if (!selectedModel) return;
@@ -109,15 +115,53 @@ function App() {
     setIsTyping(false);
   };
 
+  // The single gate every model-select action passes through (the header
+  // dropdown and the welcome screen's cards both just call this, unchanged).
+  // Switching is only ever immediate when there's nothing to lose yet -- no
+  // model chosen, or a model chosen but no messages sent. Once a
+  // conversation is actually underway, the switch is held pending
+  // confirmation instead of applied right away.
+  const requestModelSwitch = (modelId: string) => {
+    if (modelId === selectedModel) return;
+    if (selectedModel === null || messages.length === 0) {
+      setSelectedModel(modelId);
+      return;
+    }
+    setPendingModel(modelId);
+  };
+
+  const confirmModelSwitch = () => {
+    if (!pendingModel) return;
+    setSelectedModel(pendingModel);
+    setMessages([]);
+    setIsTyping(false);
+    setPendingModel(null);
+  };
+
+  const cancelModelSwitch = () => setPendingModel(null);
+
   return (
-    <ChatLayout
-      messages={messages}
-      isTyping={isTyping}
-      selectedModel={selectedModel}
-      onSelectModel={setSelectedModel}
-      onNewChat={handleNewChat}
-      onSendMessage={handleSendMessage}
-    />
+    <>
+      <ChatLayout
+        messages={messages}
+        isTyping={isTyping}
+        selectedModel={selectedModel}
+        onSelectModel={requestModelSwitch}
+        onNewChat={handleNewChat}
+        onSendMessage={handleSendMessage}
+      />
+      <AnimatePresence>
+        {pendingModel && selectedModel && (
+          <ModelSwitchConfirm
+            key="model-switch-confirm"
+            fromModelId={selectedModel}
+            toModelId={pendingModel}
+            onConfirm={confirmModelSwitch}
+            onCancel={cancelModelSwitch}
+          />
+        )}
+      </AnimatePresence>
+    </>
   );
 }
 
