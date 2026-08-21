@@ -9,16 +9,15 @@ export type ModelRegistryEntry = {
 };
 
 // Single source of truth for "our app ID" -> "real OpenRouter model ID".
-// The frontend only ever knows about gpt/gemini/claude; everything below
+// The frontend only ever knows about gpt/gemma/nemotron; everything below
 // this point is server-only and never sent to the browser.
 //
-// gpt is wired to a specific, real, free OpenAI model (Milestone 4).
-// gemini/claude still resolve to OpenRouter's own "openrouter/free" router
-// (a free-model router OpenRouter provides for exactly this purpose) as a
-// $0 placeholder pending Milestone 5. All model IDs here were verified
-// live against https://openrouter.ai/api/v1/models before wiring them in
-// -- to go live with real per-provider models later, swap only the
-// `openRouterModel` values below. No other file needs to change.
+// All three app IDs now resolve to specific, real, free models (Milestone
+// 5 replaced the earlier openrouter/free placeholders for gemma/nemotron
+// with the actual Google/NVIDIA free models). Every ID here was verified
+// live against https://openrouter.ai/api/v1/models before wiring it in --
+// to point an app ID at a different OpenRouter model later, change only
+// its `openRouterModel` value below. No other file needs to change.
 export const MODEL_REGISTRY: Record<ModelId, ModelRegistryEntry> = {
   gpt: {
     id: "gpt",
@@ -26,17 +25,17 @@ export const MODEL_REGISTRY: Record<ModelId, ModelRegistryEntry> = {
     description: "OpenAI's open-weight gpt-oss-20b model, served free via OpenRouter.",
     openRouterModel: "openai/gpt-oss-20b:free",
   },
-  gemini: {
-    id: "gemini",
-    displayName: "Gemini",
-    description: "Google's Gemini model.",
-    openRouterModel: "openrouter/free",
+  gemma: {
+    id: "gemma",
+    displayName: "Gemma",
+    description: "Google's open-weight Gemma 4 26B A4B model, served free via OpenRouter.",
+    openRouterModel: "google/gemma-4-26b-a4b-it:free",
   },
-  claude: {
-    id: "claude",
-    displayName: "Claude",
-    description: "Anthropic's Claude model.",
-    openRouterModel: "openrouter/free",
+  nemotron: {
+    id: "nemotron",
+    displayName: "Nemotron",
+    description: "NVIDIA's open-weight Nemotron 3 Super model, served free via OpenRouter.",
+    openRouterModel: "nvidia/nemotron-3-super-120b-a12b:free",
   },
 };
 
