@@ -142,16 +142,29 @@ export function WelcomeScreen({ previewModel, onSelectModel, onPreviewModel }: W
                     isEmphasized ? `${model.accent.border} bg-white/[0.07]` : "border-white/[0.09] group-hover:border-white/[0.16]"
                   }`}
                 />
+                {/* fixed icon slot: each glyph's own path geometry renders
+                    at a different optical size at the same nominal size
+                    prop (e.g. Gemma's mark is scaled up internally to
+                    match the others' visual weight), so every icon is
+                    centered in an identically-sized box rather than
+                    dropped straight into the flex stack -- that keeps the
+                    title/subtitle baselines identical across cards
+                    regardless of any individual glyph's rendered size. */}
                 <motion.span
                   animate={{ scale: isEmphasized ? 1.12 : 1 }}
                   transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
                   style={{ filter: isEmphasized ? `drop-shadow(0 0 10px ${glow})` : "none" }}
-                  className={`transition-[filter] duration-300 ${model.accent.text}`}
+                  className={`flex h-11 w-11 shrink-0 items-center justify-center transition-[filter] duration-300 ${model.accent.text}`}
                 >
                   <Icon size={30} />
                 </motion.span>
                 <span className="text-base font-semibold text-neutral-50">{model.label}</span>
-                <span className={`text-[11px] leading-snug transition-colors duration-300 ${model.accent.text} opacity-80`}>
+                {/* reserved for two lines regardless of actual tagline
+                    length, so a one-line tagline doesn't leave its card
+                    shorter than its neighbors */}
+                <span
+                  className={`min-h-[30px] text-[11px] leading-snug transition-colors duration-300 ${model.accent.text} opacity-80`}
+                >
                   {model.tagline}
                 </span>
               </motion.button>

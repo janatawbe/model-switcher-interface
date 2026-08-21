@@ -1,5 +1,5 @@
 import type { ReactElement } from "react";
-import { ClaudeGlyph, GeminiGlyph, OpenAIGlyph, type ModelGlyphProps } from "./ModelGlyphs";
+import { GemmaGlyph, NvidiaGlyph, OpenAIGlyph, type ModelGlyphProps } from "./ModelGlyphs";
 
 // The real, recognizable per-model mark (not a generic icon-library glyph),
 // used everywhere a model's identity is shown -- welcome cards, selector,
@@ -64,55 +64,54 @@ export const MODELS: ModelOption[] = [
     },
   },
   {
-    id: "gemini",
-    label: "Gemini",
+    id: "gemma",
+    label: "Gemma",
     provider: "Google",
-    tagline: "Analytical · Fast · Insightful",
-    icon: GeminiGlyph,
+    tagline: "Compact · Multilingual · Fast",
+    icon: GemmaGlyph,
     accent: {
-      text: "text-cyan-300",
-      dot: "bg-cyan-400",
-      ring: "ring-cyan-400/25",
-      focusRing: "focus-within:ring-cyan-400/20",
-      softBg: "bg-cyan-500/10",
-      border: "border-cyan-400/30",
-      solidButton: "bg-cyan-500 hover:bg-cyan-400 text-white",
-      glow: "shadow-[0_0_40px_-10px_rgba(34,211,238,0.5)]",
+      text: "text-blue-300",
+      dot: "bg-blue-400",
+      ring: "ring-blue-400/25",
+      focusRing: "focus-within:ring-blue-400/20",
+      softBg: "bg-blue-500/10",
+      border: "border-blue-400/30",
+      solidButton: "bg-blue-500 hover:bg-blue-400 text-white",
+      glow: "shadow-[0_0_40px_-10px_rgba(66,133,244,0.5)]",
     },
     aurora: {
-      primary: [0.1, 0.92, 0.98],
-      secondary: [0.02, 0.7, 0.68],
-      highlight: [0.85, 1.0, 0.99],
+      // Google blue, pushed a little brighter than the literal brand hex --
+      // blue reads quieter than violet/green at matched luminance, so it
+      // gets both a brightness nudge and a small idleWeight boost below.
+      primary: [0.42, 0.62, 1.0],
+      secondary: [0.18, 0.38, 0.88],
+      highlight: [0.82, 0.9, 1.0],
+      idleWeight: 1.15,
     },
   },
   {
-    id: "claude",
-    label: "Claude",
-    provider: "Anthropic",
-    tagline: "Thoughtful · Nuanced · Reliable",
-    icon: ClaudeGlyph,
+    id: "nemotron",
+    label: "Nemotron",
+    provider: "NVIDIA",
+    tagline: "Reasoning · Agentic · Scalable",
+    icon: NvidiaGlyph,
     accent: {
-      text: "text-orange-300",
-      dot: "bg-orange-400",
-      ring: "ring-orange-400/25",
-      focusRing: "focus-within:ring-orange-400/20",
-      softBg: "bg-orange-500/10",
-      border: "border-orange-400/30",
-      solidButton: "bg-orange-500 hover:bg-orange-400 text-white",
-      glow: "shadow-[0_0_40px_-10px_rgba(249,115,22,0.5)]",
+      text: "text-lime-300",
+      dot: "bg-lime-400",
+      ring: "ring-lime-400/25",
+      focusRing: "focus-within:ring-lime-400/20",
+      softBg: "bg-lime-500/10",
+      border: "border-lime-400/30",
+      solidButton: "bg-lime-500 hover:bg-lime-400 text-white",
+      glow: "shadow-[0_0_40px_-10px_rgba(132,204,22,0.5)]",
     },
     aurora: {
-      // warm luminous tangerine -- brighter/richer than a muted copper so it
-      // carries equal atmospheric weight next to the vivid violet/cyan, but
-      // still keeps enough green/blue to stay soft rather than traffic-cone.
-      // Pushed more saturated (less green/blue) than earlier passes: orange
-      // reads flatter than violet/cyan against a near-black field at equal
-      // luminance, so it needs more raw saturation, not just brightness, to
-      // carry comparable visual presence.
-      primary: [1.0, 0.55, 0.22],
-      secondary: [0.95, 0.38, 0.09],
-      highlight: [1.0, 0.8, 0.5],
-      idleWeight: 1.55,
+      // NVIDIA's signature yellow-green -- already reads at comparable
+      // luminance to the violet/blue at equal weight, so no idleWeight
+      // compensation needed here.
+      primary: [0.55, 0.85, 0.15],
+      secondary: [0.32, 0.62, 0.05],
+      highlight: [0.85, 1.0, 0.55],
     },
   },
 ];
