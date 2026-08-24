@@ -125,7 +125,19 @@ export function Aurora({ activeModel, previewModel }: AuroraProps) {
     };
     resize();
 
-    const resizeObserver = new ResizeObserver(resize);
+    // Changing canvas.width/height (inside resize()) clears the drawing
+    // buffer per the canvas spec -- fine while the render loop is running,
+    // since the next frame repaints it, but the loop deliberately stops
+    // itself once the animation settles (see the `idle` convergence check
+    // below) to avoid redrawing an unchanging frame forever. Without also
+    // waking it here, a resize after that point clears the canvas and
+    // nothing ever redraws it. wakeRef is the same restart path prop
+    // changes already use, so this settles right back to idle after one
+    // fresh frame at the new size.
+    const resizeObserver = new ResizeObserver(() => {
+      resize();
+      wakeRef.current();
+    });
     resizeObserver.observe(container);
 
     const targetMouse = { x: 0, y: 0 };
