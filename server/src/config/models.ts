@@ -9,8 +9,8 @@ export type ModelRegistryEntry = {
 };
 
 // Single source of truth for "our app ID" -> "real OpenRouter model ID".
-// The frontend only ever knows about gpt/gemma/nemotron; everything below
-// this point is server-only and never sent to the browser.
+// The frontend only ever knows about gemma/nemotron/laguna; everything
+// below this point is server-only and never sent to the browser.
 //
 // All three app IDs now resolve to specific, real, free models (Milestone
 // 5 replaced the earlier openrouter/free placeholders for gemma/nemotron
@@ -19,23 +19,23 @@ export type ModelRegistryEntry = {
 // to point an app ID at a different OpenRouter model later, change only
 // its `openRouterModel` value below. No other file needs to change.
 export const MODEL_REGISTRY: Record<ModelId, ModelRegistryEntry> = {
-  gpt: {
-    id: "gpt",
-    displayName: "GPT",
-    description: "OpenAI's open-weight gpt-oss-20b model, served free via OpenRouter.",
-    openRouterModel: "openai/gpt-oss-20b:free",
-  },
   gemma: {
     id: "gemma",
     displayName: "Gemma",
-    description: "Google's open-weight Gemma 4 26B A4B model, served free via OpenRouter.",
-    openRouterModel: "google/gemma-4-26b-a4b-it:free",
+    description: "Google's open-weight Gemma 4 31B model, served free via OpenRouter.",
+    openRouterModel: "google/gemma-4-31b-it:free",
   },
   nemotron: {
     id: "nemotron",
     displayName: "Nemotron",
     description: "NVIDIA's open-weight Nemotron 3 Super model, served free via OpenRouter.",
     openRouterModel: "nvidia/nemotron-3-super-120b-a12b:free",
+  },
+  laguna: {
+    id: "laguna",
+    displayName: "Laguna",
+    description: "Poolside's open-weight Laguna model, served free via OpenRouter.",
+    openRouterModel: "poolside/laguna-s-2.1:free",
   },
 };
 

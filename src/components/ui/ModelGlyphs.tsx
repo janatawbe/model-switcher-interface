@@ -10,10 +10,59 @@ export type ModelGlyphProps = {
   className?: string;
 };
 
-export function OpenAIGlyph({ size = 16, className }: ModelGlyphProps) {
+// Poolside's mark ships as three overlapping soft-edged gradient shapes
+// (each fading via its own linearGradient) rather than a flat path, so --
+// same reasoning as Gemma below -- its gradient/mask/clipPath ids need to
+// be unique per render or two simultaneous instances (e.g. the welcome
+// card and the header selector open at once) would fight over the same
+// SVG ids and one would render blank.
+export function PoolsideGlyph({ size = 16, className }: ModelGlyphProps) {
+  const uid = useId();
+  const clipId = `poolside-clip-${uid}`;
+  const maskId = `poolside-mask-${uid}`;
+  const gradientId1 = `poolside-gradient-1-${uid}`;
+  const gradientId2 = `poolside-gradient-2-${uid}`;
+  const gradientId3 = `poolside-gradient-3-${uid}`;
+
   return (
-    <svg viewBox="0 0 24 24" width={size} height={size} fill="currentColor" className={className} aria-hidden="true">
-      <path d="M9.205 8.658v-2.26c0-.19.072-.333.238-.428l4.543-2.616c.619-.357 1.356-.523 2.117-.523 2.854 0 4.662 2.212 4.662 4.566 0 .167 0 .357-.024.547l-4.71-2.759a.797.797 0 00-.856 0l-5.97 3.473zm10.609 8.8V12.06c0-.333-.143-.57-.429-.737l-5.97-3.473 1.95-1.118a.433.433 0 01.476 0l4.543 2.617c1.309.76 2.189 2.378 2.189 3.948 0 1.808-1.07 3.473-2.76 4.163zM7.802 12.703l-1.95-1.142c-.167-.095-.239-.238-.239-.428V5.899c0-2.545 1.95-4.472 4.591-4.472 1 0 1.927.333 2.712.928L8.23 5.067c-.285.166-.428.404-.428.737v6.898zM12 15.128l-2.795-1.57v-3.33L12 8.658l2.795 1.57v3.33L12 15.128zm1.796 7.23c-1 0-1.927-.332-2.712-.927l4.686-2.712c.285-.166.428-.404.428-.737v-6.898l1.974 1.142c.167.095.238.238.238.428v5.233c0 2.545-1.974 4.472-4.614 4.472zm-5.637-5.303l-4.544-2.617c-1.308-.761-2.188-2.378-2.188-3.948A4.482 4.482 0 014.21 6.327v5.423c0 .333.143.571.428.738l5.947 3.449-1.95 1.118a.432.432 0 01-.476 0zm-.262 3.9c-2.688 0-4.662-2.021-4.662-4.519 0-.19.024-.38.047-.57l4.686 2.71c.286.167.571.167.856 0l5.97-3.448v2.26c0 .19-.07.333-.237.428l-4.543 2.616c-.619.357-1.356.523-2.117.523zm5.899 2.83a5.947 5.947 0 005.827-4.756C22.287 18.339 24 15.84 24 13.296c0-1.665-.713-3.282-1.998-4.448.119-.5.19-.999.19-1.498 0-3.401-2.759-5.947-5.946-5.947-.642 0-1.26.095-1.88.31A5.962 5.962 0 0010.205 0a5.947 5.947 0 00-5.827 4.757C1.713 5.447 0 7.945 0 10.49c0 1.666.713 3.283 1.998 4.448-.119.5-.19 1-.19 1.499 0 3.401 2.759 5.946 5.946 5.946.642 0 1.26-.095 1.88-.309a5.96 5.96 0 004.162 1.713z" />
+    <svg
+      viewBox="0 0 24 24"
+      width={size}
+      height={size}
+      fill="currentColor"
+      fillRule="evenodd"
+      className={className}
+      aria-hidden="true"
+    >
+      <g clipPath={`url(#${clipId})`}>
+        <mask height="24" id={maskId} maskUnits="userSpaceOnUse" style={{ maskType: "alpha" }} width="24" x="0" y="0">
+          <path d="M24 0H0v24h24V0z" fill={`url(#${gradientId1})`} />
+          <path d="M24 0H0v24h24V0z" fill={`url(#${gradientId2})`} />
+          <path d="M24 0H0v24h24V0z" fill={`url(#${gradientId3})`} />
+        </mask>
+        <g mask={`url(#${maskId})`}>
+          <path d="M6.742 22.786a11.93 11.93 0 01-5.232-4.963 11.98 11.98 0 01-1.463-6.886.975.975 0 011.943.173c-.178 2.005.246 4 1.226 5.769a9.968 9.968 0 003.526 3.685l4.586-9.405c-1.795-.598-3.29-.338-3.425-.312l-.058.012a.972.972 0 01-1.054-.576c-.24-.448-.96-1.544-1.834-1.97-.873-.426-2.218-.289-2.651-.195a.977.977 0 01-1.087-1.38C4.117.792 11.315-1.686 17.262 1.215c5.946 2.9 8.422 10.093 5.529 16.038l-.01.02c-2.903 5.94-10.095 8.414-16.039 5.514zm6.338-10.773l-4.586 9.405c4.629 1.73 9.896-.192 12.304-4.558-.338-.524-.932-1.275-1.62-1.61-.888-.434-2.19-.292-2.637-.198a.989.989 0 01-.616-.055.984.984 0 01-.49-.473c-.028-.058-.739-1.438-2.355-2.51zM5.81 6.56c.747.365 1.356.944 1.81 1.49 1.406-2.15 3.314-3.774 4.787-4.82a20.81 20.81 0 011.66-1.067A10.078 10.078 0 003.882 6.077c.617.042 1.297.174 1.929.482zm12.671-2.243c.09.624.152 1.294.182 1.965.083 1.801-.021 4.296-.844 6.722.686.018 1.484.14 2.214.495.652.318 1.198.8 1.628 1.28a10.082 10.082 0 00-3.18-10.462zm-5.394 5.46a9.522 9.522 0 012.984 2.287c1.075-3.493.606-7.402.215-8.85-1.381.584-4.75 2.62-6.84 5.618a9.515 9.515 0 013.64.944z" />
+        </g>
+      </g>
+      <defs>
+        <linearGradient gradientUnits="userSpaceOnUse" id={gradientId1} x1="6.75" x2="5.625" y1="20.55" y2="20.55">
+          <stop stopColor="currentColor" />
+          <stop offset="1" stopColor="currentColor" stopOpacity="0" />
+        </linearGradient>
+        <linearGradient gradientUnits="userSpaceOnUse" id={gradientId2} x1="6.825" x2="7.2" y1="11.85" y2="11.137">
+          <stop stopColor="currentColor" stopOpacity="0" />
+          <stop offset="1" stopColor="currentColor" />
+        </linearGradient>
+        <linearGradient gradientUnits="userSpaceOnUse" id={gradientId3} x1=".975" x2=".975" y1="20.512" y2="10.912">
+          <stop stopColor="currentColor" />
+          <stop offset=".105" stopColor="currentColor" stopOpacity=".9" />
+          <stop offset=".904" stopColor="currentColor" stopOpacity=".04" />
+          <stop offset="1" stopColor="currentColor" stopOpacity="0" />
+        </linearGradient>
+        <clipPath id={clipId}>
+          <path d="M0 0h24v24H0z" fill="currentColor" />
+        </clipPath>
+      </defs>
     </svg>
   );
 }
@@ -28,7 +77,7 @@ export function OpenAIGlyph({ size = 16, className }: ModelGlyphProps) {
 // values below are Google's own, from the same icon set's color variant)
 // fixes the legibility without changing the mark's geometry or this app's
 // surrounding accent/color system. Its path also carries more built-in
-// padding than the OpenAI/NVIDIA marks (the reticle ring sits well inside
+// padding than the Poolside/NVIDIA marks (the reticle ring sits well inside
 // the 24x24 box rather than touching its edges), so at an identical
 // numeric size it reads visibly smaller -- scaled up here so all three
 // marks land at the same optical size at every call site, with no other
