@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { Check, MessagesSquare, Pencil, Plus, Trash2, X } from "lucide-react";
+import { Check, MessagesSquare, PanelLeftClose, PanelLeftOpen, Pencil, Plus, Search, Trash2, X } from "lucide-react";
 import type { Conversation } from "../../types/chat";
 import { glass } from "../ui/theme";
 import { BrandMark } from "../ui/BrandMark";
 import { getModelLabel } from "../ui/models";
 import { DeleteConversationConfirm } from "../ui/DeleteConversationConfirm";
+import { HistoryModelFilter } from "../ui/HistoryModelFilter";
 
 type SidebarProps = {
   onNewChat: () => void;
@@ -14,6 +15,8 @@ type SidebarProps = {
   onSelectConversation: (conversationId: string) => void;
   onRenameConversation: (conversationId: string, newTitle: string) => void;
   onDeleteConversation: (conversationId: string) => void;
+  isOpen: boolean;
+  onToggleOpen: () => void;
 };
 
 export function Sidebar({
@@ -23,16 +26,37 @@ export function Sidebar({
   onSelectConversation,
   onRenameConversation,
   onDeleteConversation,
+  isOpen,
+  onToggleOpen,
 }: SidebarProps) {
-  // Most recently active conversation first -- conversations only ever
-  // gain a later updatedAt by getting new messages, so this doubles as
-  // "most recently used" ordering.
-  const sortedConversations = [...conversations].sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1));
-
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftTitle, setDraftTitle] = useState("");
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const editInputRef = useRef<HTMLInputElement>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [modelFilter, setModelFilter] = useState<string>("all");
+
+  // Most recently active conversation first -- conversations only ever
+  // gain a later updatedAt by getting new messages, so this doubles as
+  // "most recently used" ordering. Applied before filtering so search/model
+  // filtering only ever narrows this same order, never reshuffles it.
+  const sortedConversations = [...conversations].sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1));
+
+  const normalizedQuery = searchQuery.trim().toLowerCase();
+  // Search and model filter are pure display filters over the existing
+  // `conversations` prop -- nothing here ever calls setConversations or
+  // touches storage, so clearing either one just re-includes everything
+  // again on the next render.
+  const visibleConversations = sortedConversations.filter((conversation) => {
+    if (modelFilter !== "all" && conversation.model !== modelFilter) return false;
+    if (!normalizedQuery) return true;
+    const titleMatches = conversation.title.toLowerCase().includes(normalizedQuery);
+    const contentMatches = conversation.messages.some((message) =>
+      message.content.toLowerCase().includes(normalizedQuery),
+    );
+    return titleMatches || contentMatches;
+  });
+  const isFiltering = normalizedQuery.length > 0 || modelFilter !== "all";
 
   useEffect(() => {
     if (editingId) {
@@ -63,15 +87,58 @@ export function Sidebar({
 
   const pendingDeleteConversation = conversations.find((c) => c.id === pendingDeleteId) ?? null;
 
-  return (
-    <aside className="flex h-full w-64 shrink-0 flex-col border-r border-white/[0.06] bg-white/[0.03] backdrop-blur-xl">
-      <div className="flex items-center gap-2.5 px-4 py-5">
+  // Collapsed to a slim rail rather than unmounted -- New Chat and the
+  // toggle itself stay reachable with one click even with history hidden,
+  // and nothing about conversation state changes just because the panel
+  // showing it is closed.
+  if (!isOpen) {
+    return (
+      <aside className="flex h-full w-14 shrink-0 flex-col items-center gap-3 border-r border-white/[0.06] bg-white/[0.03] py-5 backdrop-blur-xl">
         <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${glass.raised} text-neutral-200`}>
           <BrandMark size={16} variant="mono" />
         </div>
-        <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-neutral-200">
-          AI Model Switcher
-        </span>
+        <button
+          type="button"
+          onClick={onToggleOpen}
+          aria-label="Open sidebar"
+          title="Open sidebar"
+          className={`flex h-8 w-8 items-center justify-center rounded-lg text-neutral-400 transition-colors hover:bg-white/[0.08] hover:text-neutral-100`}
+        >
+          <PanelLeftOpen size={16} />
+        </button>
+        <button
+          type="button"
+          onClick={onNewChat}
+          aria-label="New chat"
+          title="New chat"
+          className={`flex h-8 w-8 items-center justify-center rounded-lg ${glass.raised} text-neutral-200 transition-colors hover:border-white/[0.16] hover:bg-white/[0.09]`}
+        >
+          <Plus size={16} strokeWidth={2.25} />
+        </button>
+      </aside>
+    );
+  }
+
+  return (
+    <aside className="flex h-full w-64 shrink-0 flex-col border-r border-white/[0.06] bg-white/[0.03] backdrop-blur-xl">
+      <div className="flex items-center justify-between gap-2.5 px-4 py-5">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${glass.raised} text-neutral-200`}>
+            <BrandMark size={16} variant="mono" />
+          </div>
+          <span className="truncate text-[11px] font-semibold uppercase tracking-[0.14em] text-neutral-200">
+            AI Model Switcher
+          </span>
+        </div>
+        <button
+          type="button"
+          onClick={onToggleOpen}
+          aria-label="Close sidebar"
+          title="Close sidebar"
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-neutral-400 transition-colors hover:bg-white/[0.08] hover:text-neutral-100"
+        >
+          <PanelLeftClose size={15} />
+        </button>
       </div>
 
       <div className="px-3">
@@ -94,12 +161,40 @@ export function Sidebar({
         </motion.button>
       </div>
 
-      <div className="mt-6 flex-1 overflow-y-auto px-3">
+      {conversations.length > 0 && (
+        <div className="mt-4 flex items-center gap-1.5 px-3">
+          <div className={`flex min-w-0 flex-1 items-center gap-2 rounded-lg ${glass.base} px-2.5 py-1.5`}>
+            <Search size={13} className="shrink-0 text-neutral-500" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="Search conversations..."
+              aria-label="Search conversations"
+              className="min-w-0 flex-1 bg-transparent text-xs text-neutral-200 outline-none placeholder:text-neutral-500"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery("")}
+                aria-label="Clear search"
+                className="flex h-4 w-4 shrink-0 items-center justify-center text-neutral-500 hover:text-neutral-200"
+              >
+                <X size={12} />
+              </button>
+            )}
+          </div>
+
+          <HistoryModelFilter value={modelFilter} onChange={setModelFilter} />
+        </div>
+      )}
+
+      <div className="mt-4 flex-1 overflow-y-auto px-3">
         <p className="px-1 text-[11px] font-medium uppercase tracking-wide text-neutral-500">
           Recent
         </p>
 
-        {sortedConversations.length === 0 ? (
+        {conversations.length === 0 ? (
           <div className="mt-4 flex flex-col items-start gap-2 px-1">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/[0.06] bg-white/[0.03] text-neutral-500">
               <MessagesSquare size={15} />
@@ -109,9 +204,19 @@ export function Sidebar({
               Your conversations will appear here.
             </p>
           </div>
+        ) : visibleConversations.length === 0 ? (
+          <div className="mt-4 flex flex-col items-start gap-2 px-1">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/[0.06] bg-white/[0.03] text-neutral-500">
+              <Search size={15} />
+            </div>
+            <p className="text-sm font-medium text-neutral-400">No matching conversations</p>
+            <p className="text-xs leading-relaxed text-neutral-500">
+              {isFiltering ? "Try a different search or filter." : "Your conversations will appear here."}
+            </p>
+          </div>
         ) : (
           <div className="mt-3 flex flex-col gap-1">
-            {sortedConversations.map((conversation) => {
+            {visibleConversations.map((conversation) => {
               const isActive = conversation.id === activeConversationId;
               const isEditing = conversation.id === editingId;
 

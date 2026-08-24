@@ -21,23 +21,16 @@ export type ChatRequest = {
   messages: ChatMessage[];
 };
 
-// What POST /api/chat returns on success.
-export type ChatResponse = {
-  message: ChatMessage & { model: ModelId };
-};
-
-// The AI service's own request/response contract -- deliberately identical
-// in shape to ChatRequest/ChatResponse today, but kept as separate types
-// since the route layer and the AI service layer are allowed to diverge
-// later (e.g. the service gaining provider-specific options the route
-// never needs to see).
+// The AI service's own request contract -- deliberately identical in shape
+// to ChatRequest today, but kept as a separate type since the route layer
+// and the AI service layer are allowed to diverge later (e.g. the service
+// gaining provider-specific options the route never needs to see).
+// POST /api/chat's success response is a stream of newline-delimited JSON
+// chunks rather than a single body, so there's no corresponding response
+// type here -- see routes/chat.ts and aiService.streamMessage.
 export type AIServiceRequest = {
   model: ModelId;
   messages: ChatMessage[];
-};
-
-export type AIServiceResponse = {
-  message: ChatMessage;
 };
 
 // AI_RATE_LIMITED / AI_PROVIDER_UNAVAILABLE / AI_AUTH_ERROR /

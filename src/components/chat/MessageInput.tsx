@@ -1,4 +1,4 @@
-import { useState, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { motion } from "motion/react";
 import { ArrowUp } from "lucide-react";
 import { getModel } from "../ui/models";
@@ -10,10 +10,31 @@ type MessageInputProps = {
   disabled?: boolean;
 };
 
+// Matches the textarea's existing max-h-40 (10rem) Tailwind class -- kept
+// as a real number here since growing the box to fit its content has to
+// happen imperatively (a textarea's height never tracks its own content
+// through CSS alone), and this is the ceiling that decision is capped at.
+const MAX_TEXTAREA_HEIGHT_PX = 160;
+
 export function MessageInput({ selectedModel, onSend, disabled }: MessageInputProps) {
   const [value, setValue] = useState("");
   const [focused, setFocused] = useState(false);
   const model = getModel(selectedModel);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Grows the box to fit whatever's actually typed or pasted, capped at
+  // MAX_TEXTAREA_HEIGHT_PX (matching max-h-40 below) where it switches to
+  // its own internal scroll instead of growing further. Resetting to
+  // "auto" first (rather than reading scrollHeight directly against
+  // whatever height is currently set) is what lets this shrink back down
+  // too -- e.g. after Send clears the value, or the user deletes pasted
+  // text -- not just grow.
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, MAX_TEXTAREA_HEIGHT_PX)}px`;
+  }, [value]);
 
   const submit = () => {
     const trimmed = value.trim();
@@ -39,13 +60,14 @@ export function MessageInput({ selectedModel, onSend, disabled }: MessageInputPr
         className={`flex items-end gap-3 rounded-2xl ${glass.raised} px-4 py-3 ring-0 transition-[box-shadow,border-color] duration-300 focus-within:border-white/[0.16] focus-within:ring-4 ${model?.accent.focusRing ?? ""} ${focused ? model?.accent.glow ?? "" : ""}`}
       >
         <textarea
+          ref={textareaRef}
           value={value}
           onChange={(event) => setValue(event.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={selectedModel ? "Ask anything..." : "Choose a model to begin..."}
           rows={1}
           aria-label="Message"
-          className="max-h-40 flex-1 resize-none bg-transparent text-[15px] text-neutral-100 outline-none placeholder:text-neutral-500"
+          className="max-h-40 flex-1 resize-none overflow-y-auto bg-transparent text-[15px] text-neutral-100 outline-none placeholder:text-neutral-500"
         />
         {model && (
           <span className={`hidden select-none text-xs font-medium tracking-wide transition-colors duration-300 sm:inline ${model.accent.text}`}>

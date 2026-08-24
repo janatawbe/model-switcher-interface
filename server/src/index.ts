@@ -3,6 +3,7 @@ import cors from "cors";
 import express, { type ErrorRequestHandler } from "express";
 import { chatRouter } from "./routes/chat.js";
 import { healthRouter } from "./routes/health.js";
+import { titleRouter } from "./routes/title.js";
 import { ApiError } from "./types/ai.js";
 
 const app = express();
@@ -13,6 +14,7 @@ app.use(express.json());
 
 app.use("/api", healthRouter);
 app.use("/api", chatRouter);
+app.use("/api", titleRouter);
 
 // Centralized error handling: every route forwards failures here via
 // next(err) instead of formatting its own error response. Known failures
