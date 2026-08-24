@@ -120,7 +120,19 @@ export function Sidebar({
   }
 
   return (
-    <aside className="flex h-full w-64 shrink-0 flex-col border-r border-white/[0.06] bg-white/[0.03] backdrop-blur-xl">
+    <>
+      {/* Below md, the expanded panel becomes a floating overlay above the
+          chat rather than pushing it into an unusably narrow column -- the
+          backdrop dismisses it the same way the existing confirm dialogs
+          already close on an outside click. At md and up this is inert
+          (hidden), and the aside itself reverts to the original inline,
+          content-pushing layout via the md: overrides below. */}
+      <div
+        className="fixed inset-0 z-30 bg-black/60 transition-opacity md:hidden"
+        onClick={onToggleOpen}
+        aria-hidden="true"
+      />
+      <aside className="fixed inset-y-0 left-0 z-40 flex h-full w-64 shrink-0 flex-col border-r border-white/[0.06] bg-white/[0.03] backdrop-blur-xl md:relative md:inset-auto md:z-auto">
       <div className="flex items-center justify-between gap-2.5 px-4 py-5">
         <div className="flex min-w-0 items-center gap-2.5">
           <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${glass.raised} text-neutral-200`}>
@@ -283,9 +295,15 @@ export function Sidebar({
                     <span className="text-[11px] text-neutral-500">{getModelLabel(conversation.model)}</span>
                   </button>
 
+                  {/* Always visible on touch devices (no hover to reveal
+                      them on) -- only gated behind hover/focus at md and up,
+                      where a mouse is the primary input and constant visual
+                      noise on every row is worth avoiding. */}
                   <div
                     className={`absolute right-1.5 top-1.5 flex items-center gap-0.5 transition-opacity ${
-                      isActive ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"
+                      isActive
+                        ? "opacity-100"
+                        : "opacity-100 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100"
                     }`}
                   >
                     <button
@@ -333,6 +351,7 @@ export function Sidebar({
           />
         )}
       </AnimatePresence>
-    </aside>
+      </aside>
+    </>
   );
 }
