@@ -4,7 +4,7 @@ import { ApiError, type AIServiceRequest, type AIServiceResponse, type ErrorCode
 const OPENROUTER_CHAT_URL = "https://openrouter.ai/api/v1/chat/completions";
 
 // OpenRouter is the ONLY AI gateway this backend talks to -- no separate
-// OpenAI/Google/NVIDIA provider clients. Everything OpenRouter-specific
+// Poolside/Google/NVIDIA provider clients. Everything OpenRouter-specific
 // (the endpoint, headers, request/response shape) is isolated to this one
 // module so a future gateway swap only touches this file.
 type OpenRouterChatResponse = {

@@ -2,9 +2,9 @@
 // already uses (see src/components/ui/models.ts on the client side). The
 // backend owns the mapping from these to real OpenRouter model IDs; the
 // frontend never needs to know an OpenRouter ID exists.
-export type ModelId = "gpt" | "gemma" | "nemotron";
+export type ModelId = "gemma" | "nemotron" | "laguna";
 
-export const MODEL_IDS: ModelId[] = ["gpt", "gemma", "nemotron"];
+export const MODEL_IDS: ModelId[] = ["gemma", "nemotron", "laguna"];
 
 export function isModelId(value: unknown): value is ModelId {
   return typeof value === "string" && (MODEL_IDS as string[]).includes(value);

@@ -1,5 +1,5 @@
 import type { ReactElement } from "react";
-import { GemmaGlyph, NvidiaGlyph, OpenAIGlyph, type ModelGlyphProps } from "./ModelGlyphs";
+import { GemmaGlyph, NvidiaGlyph, PoolsideGlyph, type ModelGlyphProps } from "./ModelGlyphs";
 
 // The real, recognizable per-model mark (not a generic icon-library glyph),
 // used everywhere a model's identity is shown -- welcome cards, selector,
@@ -41,28 +41,6 @@ export type ModelOption = {
 };
 
 export const MODELS: ModelOption[] = [
-  {
-    id: "gpt",
-    label: "GPT",
-    provider: "OpenAI",
-    tagline: "Creative · Precise · Versatile",
-    icon: OpenAIGlyph,
-    accent: {
-      text: "text-violet-300",
-      dot: "bg-violet-400",
-      ring: "ring-violet-400/25",
-      focusRing: "focus-within:ring-violet-400/20",
-      softBg: "bg-violet-500/10",
-      border: "border-violet-400/30",
-      solidButton: "bg-violet-500 hover:bg-violet-400 text-white",
-      glow: "shadow-[0_0_40px_-10px_rgba(139,92,246,0.5)]",
-    },
-    aurora: {
-      primary: [0.74, 0.6, 0.99],
-      secondary: [0.52, 0.24, 0.97],
-      highlight: [0.97, 0.94, 1.0],
-    },
-  },
   {
     id: "gemma",
     label: "Gemma",
@@ -112,6 +90,30 @@ export const MODELS: ModelOption[] = [
       primary: [0.55, 0.85, 0.15],
       secondary: [0.32, 0.62, 0.05],
       highlight: [0.85, 1.0, 0.55],
+    },
+  },
+  {
+    id: "laguna",
+    label: "Laguna",
+    provider: "Poolside",
+    tagline: "Code-Fluent · Fast · Adaptive",
+    icon: PoolsideGlyph,
+    // Identical accent/aurora values to the model this replaced (formerly
+    // GPT/OpenAI) -- deliberately unchanged, not a new color pick.
+    accent: {
+      text: "text-violet-300",
+      dot: "bg-violet-400",
+      ring: "ring-violet-400/25",
+      focusRing: "focus-within:ring-violet-400/20",
+      softBg: "bg-violet-500/10",
+      border: "border-violet-400/30",
+      solidButton: "bg-violet-500 hover:bg-violet-400 text-white",
+      glow: "shadow-[0_0_40px_-10px_rgba(139,92,246,0.5)]",
+    },
+    aurora: {
+      primary: [0.74, 0.6, 0.99],
+      secondary: [0.52, 0.24, 0.97],
+      highlight: [0.97, 0.94, 1.0],
     },
   },
 ];
