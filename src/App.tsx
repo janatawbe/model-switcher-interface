@@ -6,17 +6,18 @@ import { getModelLabel } from "./components/ui/models";
 import { ModelSwitchConfirm } from "./components/ui/ModelSwitchConfirm";
 import { loadState, saveState } from "./lib/storage";
 
-type ChatApiResponse = {
-  message: {
-    role: "assistant";
-    content: string;
-    model: string;
-  };
-};
-
 type ChatApiErrorBody = {
   error?: { code?: string; message?: string; resetAt?: string };
 };
+
+// The three event shapes /api/chat's streamed (newline-delimited JSON)
+// response can send once it commits to streaming. Mirrors the backend's
+// routes/chat.ts exactly -- see there for why a mid-stream failure arrives
+// as an "error" event instead of a normal HTTP error status.
+type ChatStreamEvent =
+  | { type: "chunk"; content: string; model: string }
+  | { type: "done" }
+  | { type: "error"; code?: string; message?: string; resetAt?: string };
 
 // Turns a reset timestamp into a short, safe phrase -- "in about 45
 // seconds" for a near-term reset, "after 2:35 PM" (optionally "tomorrow")
@@ -82,13 +83,22 @@ function describeFailure(code: string | undefined, modelId: string, resetAt?: st
 }
 
 const MAX_TITLE_LENGTH = 60;
+// A background nicety, not something the user is waiting on -- gives up
+// and keeps the existing fallback title well before the shared chat
+// timeout/retry budget would, rather than making a rate-limited or slow
+// provider hold up the title for as long as a real chat reply might take.
+const TITLE_REQUEST_TIMEOUT_MS = 20000;
 
-// Derives a short sidebar title from the first user message, entirely
-// locally (no model call). Deliberately just cleans and truncates rather
-// than attempting a semantic rewrite -- a regex-based "rewrite" would
-// mangle arbitrary phrasing/grammar unpredictably, which is worse than a
-// faithful (if plain) excerpt of what the user actually typed.
-function generateTitle(rawContent: string): string {
+// The conversation's title the instant it's created -- entirely local (no
+// model call), so there's always something reasonable in the sidebar
+// immediately, before the first exchange has even finished. Deliberately
+// just cleans and truncates rather than attempting a semantic rewrite -- a
+// regex-based "rewrite" would mangle arbitrary phrasing/grammar
+// unpredictably, which is worse than a faithful (if plain) excerpt of what
+// the user actually typed. This is also the permanent fallback: if the
+// context-aware title request (see requestTitleGeneration below) fails or
+// times out, this is what the conversation keeps.
+function deriveFallbackTitle(rawContent: string): string {
   const cleaned = rawContent.replace(/\s+/g, " ").trim();
   if (!cleaned) return "New Conversation";
   if (cleaned.length <= MAX_TITLE_LENGTH) return cleaned;
@@ -100,6 +110,34 @@ function generateTitle(rawContent: string): string {
   // down to almost nothing.
   const boundary = lastSpace > 20 ? truncated.slice(0, lastSpace) : truncated;
   return `${boundary.trimEnd()}…`;
+}
+
+// Some models narrate their own instructions instead of just following
+// them (observed live from a reasoning-style model: replying "We need to
+// produce a short title, 3-7 words..." instead of an actual title) --
+// none of these openers belong at the start of a real topic title, so
+// catching them here is a safe backstop on top of the backend's own
+// disableReasoning request flag, not something likely to reject a
+// genuine title by mistake.
+const REASONING_PREAMBLE_PATTERN =
+  /^(we need to|let me|i should|i'll|i will|first,|okay,|sure,|the title is|here is|here's|this conversation is about)\b/i;
+
+// Cleans up whatever the title-generation model actually replied with --
+// despite the prompt's instructions, it can still wrap the title in
+// quotes, add a trailing period, or (rarely) ignore the "only the title"
+// instruction entirely. Returns null for anything that doesn't look like a
+// real, usable title, so the caller can keep the existing fallback instead
+// of showing something clearly wrong.
+function sanitizeGeneratedTitle(raw: string): string | null {
+  let cleaned = raw.trim();
+  cleaned = cleaned.replace(/^["'“”‘’]+|["'“”‘’]+$/g, "").trim();
+  cleaned = cleaned.replace(/[.!?]+$/, "").trim();
+  // A real title is one short line -- multiple lines/sentences means the
+  // model explained itself instead of just answering with the title, and
+  // an implausibly long reply means the same thing.
+  if (!cleaned || cleaned.includes("\n") || cleaned.length > 80) return null;
+  if (REASONING_PREAMBLE_PATTERN.test(cleaned)) return null;
+  return cleaned;
 }
 
 // Read once, synchronously, on module init -- both pieces of restored
@@ -160,9 +198,20 @@ function App() {
   // The only place conversations are written to localStorage -- fires
   // when the conversation set or the active id actually changes, not on
   // every render (draftModel/isTyping/pendingModel churn doesn't touch
-  // this effect's dependencies).
+  // this effect's dependencies). Debounced: a streaming response can
+  // update `conversations` many times a second as tokens arrive, and
+  // writing to localStorage synchronously on every single one would be
+  // exactly the "unnecessary write on every render" this app has
+  // deliberately avoided since Milestone 8 -- coalescing rapid updates
+  // into one write ~250ms after they settle keeps that guarantee while
+  // still saving promptly once a burst of activity actually stops.
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => {
-    saveState({ conversations, activeConversationId });
+    clearTimeout(saveTimeoutRef.current);
+    saveTimeoutRef.current = setTimeout(() => {
+      saveState({ conversations, activeConversationId });
+    }, 250);
+    return () => clearTimeout(saveTimeoutRef.current);
   }, [conversations, activeConversationId]);
 
   const appendToConversation = (conversationId: string, next: Message[]) => {
@@ -171,6 +220,88 @@ function App() {
         c.id === conversationId ? { ...c, messages: next, updatedAt: new Date().toISOString() } : c,
       ),
     );
+  };
+
+  // Updates one message's content in place without touching updatedAt or
+  // any other message -- used to grow a streaming message as chunks
+  // arrive. Always resolves conversationId/messageId through .map, so
+  // (like appendToConversation) it's a harmless no-op if the conversation
+  // was since deleted or the message id doesn't match anything.
+  const updateMessageContent = (conversationId: string, messageId: string, content: string) => {
+    setConversations((prev) =>
+      prev.map((c) =>
+        c.id === conversationId
+          ? { ...c, messages: c.messages.map((m) => (m.id === messageId ? { ...m, content } : m)) }
+          : c,
+      ),
+    );
+  };
+
+  // Clears isStreaming on one message once its stream has settled
+  // (successfully or not) -- separate from updateMessageContent so the
+  // final "done" transition doesn't need to also know the final content.
+  const markMessageSettled = (conversationId: string, messageId: string) => {
+    setConversations((prev) =>
+      prev.map((c) =>
+        c.id === conversationId
+          ? { ...c, messages: c.messages.map((m) => (m.id === messageId ? { ...m, isStreaming: false } : m)) }
+          : c,
+      ),
+    );
+  };
+
+  // Fire-and-forget: called once, right after a conversation's first real
+  // (non-error) assistant reply finishes, to upgrade the local
+  // fallback title (already showing in the sidebar since conversation
+  // creation) to a context-aware one. Never blocks or affects the chat
+  // itself -- any failure just leaves the existing title exactly as it
+  // is. Bounded by its own short client-side timeout rather than the
+  // full chat retry budget, since this is a background nicety, not
+  // something the user is waiting on.
+  const requestTitleGeneration = async (
+    conversationId: string,
+    model: string,
+    userText: string,
+    assistantText: string,
+  ) => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), TITLE_REQUEST_TIMEOUT_MS);
+
+    // Applied by both the success and failure paths below: only touches
+    // the conversation if its title hasn't already been locked by
+    // something else that happened in the meantime (most notably, the
+    // user manually renaming it while this request was in flight) --
+    // never overwrite a rename that already landed.
+    const finalize = (newTitle?: string) => {
+      setConversations((prev) =>
+        prev.map((c) =>
+          c.id === conversationId && !c.titleFinal
+            ? { ...c, title: newTitle ?? c.title, titleFinal: true }
+            : c,
+        ),
+      );
+    };
+
+    try {
+      const response = await fetch("/api/title", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model, userMessage: userText, assistantMessage: assistantText }),
+        signal: controller.signal,
+      });
+      if (!response.ok) throw new Error(`Title generation request failed (${response.status})`);
+
+      const data = (await response.json()) as { title?: string };
+      const sanitized = typeof data.title === "string" ? sanitizeGeneratedTitle(data.title) : null;
+      if (!sanitized) throw new Error("Title generation returned an unusable title");
+
+      finalize(sanitized);
+    } catch (error) {
+      console.error("Automatic title generation failed, keeping the existing title:", error);
+      finalize();
+    } finally {
+      clearTimeout(timeoutId);
+    }
   };
 
   // The only place that actually talks to the backend. `history` is
@@ -192,6 +323,30 @@ function App() {
     // own backend -- any other failure (network error, timeout, unreadable
     // JSON, etc.) leaves this at the safe, generic default.
     let userFacingMessage = "Something went wrong reaching the model. Please try again.";
+    // Set the moment the first chunk creates the streaming message, so the
+    // catch block below can tell "never even got a response" (show a
+    // normal error bubble) apart from "a real, partially-visible response
+    // already exists" (keep it -- don't bury visible content under an
+    // error).
+    let streamingMessageId: string | null = null;
+    let accumulatedContent = "";
+
+    // Marks the streamed message as no longer in-flight, then -- if this
+    // was the conversation's first real (non-error) assistant reply and
+    // its title hasn't been locked yet -- kicks off automatic title
+    // generation in the background. `history` already ends with the one
+    // user message this reply answers (see the function-level comment
+    // above), so checking it for any prior non-error assistant message is
+    // enough to know "is this the first exchange" without re-reading
+    // possibly-stale conversation state.
+    const settleWithRealReply = (targetConversationId: string, messageId: string) => {
+      markMessageSettled(targetConversationId, messageId);
+      const isFirstReply = !history.some((m) => m.role === "assistant" && !m.isError);
+      if (isFirstReply) {
+        const triggeringUserMessage = history[history.length - 1];
+        void requestTitleGeneration(targetConversationId, model, triggeringUserMessage.content, accumulatedContent);
+      }
+    };
 
     try {
       const response = await fetch("/api/chat", {
@@ -207,46 +362,95 @@ function App() {
       });
 
       if (!response.ok) {
-        // The chat bubble only ever shows a short, honest category message
-        // (see describeFailure) -- the full detail a developer needs to
-        // diagnose a model-specific failure goes to the console, not the UI.
+        // Pre-stream failure -- the backend never committed to streaming,
+        // so this is still a single normal JSON error body, exactly as
+        // before streaming existed. The chat bubble only ever shows a
+        // short, honest category message (see describeFailure); the full
+        // detail a developer needs goes to the console, not the UI.
         const errorBody = (await response.json().catch(() => null)) as ChatApiErrorBody | null;
         console.error("Chat request failed:", response.status, errorBody);
         userFacingMessage = describeFailure(errorBody?.error?.code, model, errorBody?.error?.resetAt);
         throw new Error("Chat request failed");
       }
 
-      const data = (await response.json()) as ChatApiResponse;
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error("Streaming is not supported by this browser");
 
-      // The backend already rejects an empty/unparseable model reply as
-      // its own classified failure before this ever gets a 200 -- this is
-      // just the last line of defense against a genuinely malformed
-      // response shape, so a missing/blank message.content still can't
-      // slip through as a fabricated empty assistant bubble.
-      if (!data.message || typeof data.message.content !== "string" || !data.message.content.trim()) {
-        console.error("Chat response had an unexpected shape:", data);
-        throw new Error("Malformed chat response");
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let streamError: { code?: string; message?: string; resetAt?: string } | null = null;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed) continue;
+          let event: ChatStreamEvent;
+          try {
+            event = JSON.parse(trimmed) as ChatStreamEvent;
+          } catch {
+            continue; // ignore a malformed ndjson line rather than aborting an otherwise-fine stream
+          }
+
+          if (event.type === "chunk") {
+            accumulatedContent += event.content;
+            if (streamingMessageId === null) {
+              streamingMessageId = crypto.randomUUID();
+              const streamingMessage: Message = {
+                id: streamingMessageId,
+                role: "assistant",
+                content: accumulatedContent,
+                model: event.model,
+                createdAt: new Date().toISOString(),
+                isStreaming: true,
+              };
+              appendToConversation(conversationId, [...history, streamingMessage]);
+            } else {
+              updateMessageContent(conversationId, streamingMessageId, accumulatedContent);
+            }
+          } else if (event.type === "error") {
+            streamError = { code: event.code, message: event.message, resetAt: event.resetAt };
+          }
+        }
       }
 
-      const assistantMessage: Message = {
-        id: crypto.randomUUID(),
-        role: "assistant",
-        content: data.message.content,
-        model: data.message.model,
-        createdAt: new Date().toISOString(),
-      };
-      appendToConversation(conversationId, [...history, assistantMessage]);
+      if (streamError) {
+        if (streamingMessageId && accumulatedContent.length > 0) {
+          console.error("Stream interrupted after partial content:", streamError);
+          settleWithRealReply(conversationId, streamingMessageId);
+        } else {
+          userFacingMessage = describeFailure(streamError.code, model, streamError.resetAt);
+          throw new Error("Chat stream failed");
+        }
+      } else if (streamingMessageId) {
+        settleWithRealReply(conversationId, streamingMessageId);
+      } else {
+        // The backend always sends an "error" event for a stream that
+        // never produced any content, so this shouldn't normally happen --
+        // treated the same as any other failure to reach the model rather
+        // than silently leaving nothing behind.
+        throw new Error("Empty response stream");
+      }
     } catch (error) {
       console.error("Failed to get a response:", error);
-      const errorMessage: Message = {
-        id: crypto.randomUUID(),
-        role: "assistant",
-        content: userFacingMessage,
-        model,
-        createdAt: new Date().toISOString(),
-        isError: true,
-      };
-      appendToConversation(conversationId, [...history, errorMessage]);
+      if (streamingMessageId && accumulatedContent.length > 0) {
+        settleWithRealReply(conversationId, streamingMessageId);
+      } else {
+        const errorMessage: Message = {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          content: userFacingMessage,
+          model,
+          createdAt: new Date().toISOString(),
+          isError: true,
+        };
+        appendToConversation(conversationId, [...history, errorMessage]);
+      }
     } finally {
       setPendingConversationIds((prev) => {
         const next = new Set(prev);
@@ -291,7 +495,7 @@ function App() {
       const now = new Date().toISOString();
       const newConversation: Conversation = {
         id: conversationId,
-        title: generateTitle(content),
+        title: deriveFallbackTitle(content),
         model: selectedModel,
         messages: history,
         createdAt: now,
@@ -309,21 +513,23 @@ function App() {
     });
   };
 
-  // Replaces a failed request's error bubble in place rather than
-  // appending alongside it -- `history` here is everything up to and
-  // including the original user message (the error bubble itself is
-  // excluded), so the retried request's result lands right where the
-  // error was, and the triggering user message is never duplicated.
-  const handleRetryMessage = (errorMessageId: string) => {
+  // Shared by both "Retry" (on an error bubble) and "Regenerate" (on the
+  // latest successful assistant reply) -- the operation is identical
+  // either way: replace that one assistant message in place rather than
+  // appending alongside it. `history` is everything up to and including
+  // the original triggering user message (the old assistant/error message
+  // itself is excluded), so the new request's result lands right where
+  // the old one was, and the triggering user message is never duplicated.
+  const handleRegenerateMessage = (assistantMessageId: string) => {
     if (!activeConversation || !selectedModel) return;
     if (sendGuardRef.current.has(activeConversation.id)) return;
 
-    const errorIndex = activeConversation.messages.findIndex((m) => m.id === errorMessageId);
-    if (errorIndex <= 0) return;
-    const triggerMessage = activeConversation.messages[errorIndex - 1];
+    const targetIndex = activeConversation.messages.findIndex((m) => m.id === assistantMessageId);
+    if (targetIndex <= 0) return;
+    const triggerMessage = activeConversation.messages[targetIndex - 1];
     if (triggerMessage.role !== "user") return;
 
-    const history = activeConversation.messages.slice(0, errorIndex);
+    const history = activeConversation.messages.slice(0, targetIndex);
     appendToConversation(activeConversation.id, history);
 
     const conversationId = activeConversation.id;
@@ -358,10 +564,16 @@ function App() {
   // conversation never reorders the sidebar (matching how it behaves in
   // most chat apps: only actual conversation activity moves it). Empty or
   // whitespace-only titles are rejected rather than silently accepted.
+  // Always sets titleFinal, unconditionally -- a manual rename permanently
+  // opts the conversation out of automatic title generation, even if
+  // that happens before the first exchange has finished (or was never
+  // going to run at all, e.g. renaming an older conversation).
   const handleRenameConversation = (conversationId: string, newTitle: string) => {
     const cleaned = newTitle.replace(/\s+/g, " ").trim();
     if (!cleaned) return;
-    setConversations((prev) => prev.map((c) => (c.id === conversationId ? { ...c, title: cleaned } : c)));
+    setConversations((prev) =>
+      prev.map((c) => (c.id === conversationId ? { ...c, title: cleaned, titleFinal: true } : c)),
+    );
   };
 
   const handleDeleteConversation = (conversationId: string) => {
@@ -414,7 +626,7 @@ function App() {
         onSelectModel={requestModelSwitch}
         onNewChat={handleNewChat}
         onSendMessage={handleSendMessage}
-        onRetryMessage={handleRetryMessage}
+        onRegenerateMessage={handleRegenerateMessage}
         conversations={conversations}
         activeConversationId={activeConversationId}
         onSelectConversation={handleSelectConversation}

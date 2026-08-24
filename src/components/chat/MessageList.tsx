@@ -8,10 +8,10 @@ type MessageListProps = {
   messages: Message[];
   isTyping: boolean;
   selectedModel: string | null;
-  onRetryMessage: (messageId: string) => void;
+  onRegenerateMessage: (messageId: string) => void;
 };
 
-export function MessageList({ messages, isTyping, selectedModel, onRetryMessage }: MessageListProps) {
+export function MessageList({ messages, isTyping, selectedModel, onRegenerateMessage }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const model = getModel(selectedModel);
   const ModelIcon = model?.icon;
@@ -20,6 +20,14 @@ export function MessageList({ messages, isTyping, selectedModel, onRetryMessage 
     bottomRef.current?.scrollIntoView({ block: "end", behavior: "smooth" });
   }, [messages, isTyping]);
 
+  // Once a streaming reply has actually started, the growing bubble
+  // itself is the "still working" signal -- showing the separate bounce
+  // dots underneath it too would be redundant. The dots are only for the
+  // gap between "request sent" and "first token arrived."
+  const hasStreamingMessage = messages.some((message) => message.isStreaming);
+  const showWaitingIndicator = isTyping && !hasStreamingMessage;
+  const lastMessageIndex = messages.length - 1;
+
   return (
     <div className="flex h-full flex-col overflow-y-auto px-6 py-6">
       {messages.map((message, index) => (
@@ -27,12 +35,14 @@ export function MessageList({ messages, isTyping, selectedModel, onRetryMessage 
           key={message.id}
           message={message}
           grouped={index > 0 && messages[index - 1].role === message.role}
-          onRetry={message.isError ? () => onRetryMessage(message.id) : undefined}
-          retryDisabled={isTyping}
+          isLatest={index === lastMessageIndex}
+          onRetry={message.isError ? () => onRegenerateMessage(message.id) : undefined}
+          onRegenerate={() => onRegenerateMessage(message.id)}
+          actionsDisabled={isTyping}
         />
       ))}
 
-      {isTyping && (
+      {showWaitingIndicator && (
         <div className="mt-6 flex items-start gap-3">
           <div
             className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] transition-colors duration-300 ${model?.accent.text ?? "text-neutral-400"}`}

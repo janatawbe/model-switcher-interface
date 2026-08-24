@@ -1,22 +1,46 @@
+import { useState } from "react";
 import { motion } from "motion/react";
-import { RotateCcw, User } from "lucide-react";
+import { Check, Copy, RotateCcw, User } from "lucide-react";
 import type { Message } from "../../types/chat";
 import { getModel } from "../ui/models";
+import { MarkdownContent } from "./MarkdownContent";
 
 type MessageBubbleProps = {
   message: Message;
   grouped: boolean;
+  isLatest: boolean;
   // Only meaningful (and only rendered) for an error bubble -- retrying a
-  // normal assistant reply isn't a thing, so this is left undefined for
-  // every other message.
+  // normal assistant reply is a different action (Regenerate, below).
   onRetry?: () => void;
-  retryDisabled?: boolean;
+  // Only meaningful for the latest successful assistant reply.
+  onRegenerate?: () => void;
+  actionsDisabled?: boolean;
 };
 
-export function MessageBubble({ message, grouped, onRetry, retryDisabled }: MessageBubbleProps) {
+export function MessageBubble({ message, grouped, isLatest, onRetry, onRegenerate, actionsDisabled }: MessageBubbleProps) {
   const isUser = message.role === "user";
   const model = getModel(message.model);
   const ModelIcon = model?.icon;
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(message.content);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch (error) {
+      console.error("Failed to copy message:", error);
+    }
+  };
+
+  // Copy is available on any real (non-error) assistant reply, at any
+  // position in the conversation -- copying an older answer is a normal
+  // thing to want. Regenerate only makes sense for the single most recent
+  // reply (see MessageList): regenerating an older one would silently
+  // orphan everything the user said/received after it, which nothing in
+  // this app currently handles.
+  const showCopy = !isUser && !message.isError;
+  const showRegenerate = showCopy && isLatest && !message.isStreaming && Boolean(onRegenerate);
 
   return (
     <motion.div
@@ -47,25 +71,50 @@ export function MessageBubble({ message, grouped, onRetry, retryDisabled }: Mess
           </span>
         )}
         <div
-          className={`whitespace-pre-wrap rounded-2xl px-4 py-2.5 text-[15px] leading-relaxed ${
+          className={`min-w-0 rounded-2xl px-4 py-2.5 text-[15px] leading-relaxed ${
             isUser
-              ? "rounded-tr-sm border border-white/10 bg-white/[0.08] text-neutral-100 backdrop-blur-sm"
+              ? "whitespace-pre-wrap rounded-tr-sm border border-white/10 bg-white/[0.08] text-neutral-100 backdrop-blur-sm"
               : `rounded-tl-sm border bg-white/[0.055] py-3 text-neutral-100 backdrop-blur-sm transition-colors duration-300 ${model?.accent.border ?? "border-white/10"}`
           }`}
         >
-          {message.content}
+          {isUser ? message.content : <MarkdownContent content={message.content} />}
         </div>
 
-        {onRetry && (
-          <button
-            type="button"
-            onClick={onRetry}
-            disabled={retryDisabled}
-            className="flex items-center gap-1 px-1 text-xs font-medium text-neutral-400 transition-colors hover:text-neutral-200 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:text-neutral-400"
-          >
-            <RotateCcw size={11} />
-            Retry
-          </button>
+        {(showCopy || onRetry) && (
+          <div className="flex items-center gap-3 px-1">
+            {showCopy && (
+              <button
+                type="button"
+                onClick={handleCopy}
+                className="flex items-center gap-1 text-xs font-medium text-neutral-400 transition-colors hover:text-neutral-200"
+              >
+                {copied ? <Check size={11} /> : <Copy size={11} />}
+                {copied ? "Copied" : "Copy"}
+              </button>
+            )}
+            {showRegenerate && (
+              <button
+                type="button"
+                onClick={onRegenerate}
+                disabled={actionsDisabled}
+                className="flex items-center gap-1 text-xs font-medium text-neutral-400 transition-colors hover:text-neutral-200 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:text-neutral-400"
+              >
+                <RotateCcw size={11} />
+                Regenerate
+              </button>
+            )}
+            {onRetry && (
+              <button
+                type="button"
+                onClick={onRetry}
+                disabled={actionsDisabled}
+                className="flex items-center gap-1 text-xs font-medium text-neutral-400 transition-colors hover:text-neutral-200 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:text-neutral-400"
+              >
+                <RotateCcw size={11} />
+                Retry
+              </button>
+            )}
+          </div>
         )}
       </div>
     </motion.div>

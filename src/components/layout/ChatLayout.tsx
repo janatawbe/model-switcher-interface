@@ -16,7 +16,7 @@ type ChatLayoutProps = {
   onSelectModel: (modelId: string) => void;
   onNewChat: () => void;
   onSendMessage: (content: string) => void;
-  onRetryMessage: (messageId: string) => void;
+  onRegenerateMessage: (messageId: string) => void;
   conversations: Conversation[];
   activeConversationId: string | null;
   onSelectConversation: (conversationId: string) => void;
@@ -35,7 +35,7 @@ export function ChatLayout({
   onSelectModel,
   onNewChat,
   onSendMessage,
-  onRetryMessage,
+  onRegenerateMessage,
   conversations,
   activeConversationId,
   onSelectConversation,
@@ -44,6 +44,10 @@ export function ChatLayout({
 }: ChatLayoutProps) {
   const hasMessages = messages.length > 0;
   const [previewModel, setPreviewModel] = useState<string | null>(null);
+  // Purely a UI preference for this session -- not persisted, matching
+  // how previewModel already works here. Defaults open since that's the
+  // existing, already-familiar layout.
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const activeConversation = conversations.find((c) => c.id === activeConversationId) ?? null;
   const conversationTitle = activeConversation?.title || "New Conversation";
 
@@ -79,6 +83,8 @@ export function ChatLayout({
               onSelectConversation={onSelectConversation}
               onRenameConversation={onRenameConversation}
               onDeleteConversation={onDeleteConversation}
+              isOpen={sidebarOpen}
+              onToggleOpen={() => setSidebarOpen((open) => !open)}
             />
 
             <div className="flex min-w-0 flex-1 flex-col">
@@ -104,7 +110,7 @@ export function ChatLayout({
                         messages={messages}
                         isTyping={isTyping}
                         selectedModel={selectedModel}
-                        onRetryMessage={onRetryMessage}
+                        onRegenerateMessage={onRegenerateMessage}
                       />
                     </motion.div>
                   ) : (

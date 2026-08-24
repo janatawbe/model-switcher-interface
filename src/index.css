@@ -1,4 +1,100 @@
 @import "tailwindcss";
+@import "highlight.js/styles/atom-one-dark.css";
+
+/* Token colors only -- highlight.js's own box styling (background,
+   padding) is overridden here since CodeBlock (MarkdownContent.tsx)
+   already provides the glass-styled wrapper, language label, and copy
+   button around every <pre>. */
+.hljs {
+  background: transparent;
+  padding: 0;
+  color: inherit;
+}
+
+/* Assistant-message markdown rendering (MarkdownContent.tsx). Deliberately
+   restrained relative to a typical marketing-site markdown stylesheet --
+   chat bubbles are narrow and dense, so headings/spacing stay close to the
+   surrounding 15px prose rather than a full document scale. */
+.markdown-content > :first-child {
+  margin-top: 0;
+}
+.markdown-content > :last-child {
+  margin-bottom: 0;
+}
+.markdown-content p {
+  margin: 0.5em 0;
+}
+.markdown-content ul,
+.markdown-content ol {
+  margin: 0.5em 0;
+  padding-left: 1.4em;
+}
+.markdown-content li {
+  margin: 0.2em 0;
+}
+.markdown-content li > p {
+  margin: 0;
+}
+.markdown-content h1,
+.markdown-content h2,
+.markdown-content h3,
+.markdown-content h4 {
+  margin: 0.9em 0 0.4em;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.markdown-content h1 {
+  font-size: 1.15em;
+}
+.markdown-content h2 {
+  font-size: 1.1em;
+}
+.markdown-content h3,
+.markdown-content h4 {
+  font-size: 1em;
+}
+.markdown-content a {
+  color: rgb(196 181 253);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.markdown-content blockquote {
+  margin: 0.5em 0;
+  padding-left: 0.85em;
+  border-left: 2px solid rgba(255, 255, 255, 0.16);
+  color: rgba(255, 255, 255, 0.65);
+}
+.markdown-content hr {
+  margin: 0.9em 0;
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+.markdown-content table {
+  margin: 0.6em 0;
+  border-collapse: collapse;
+  font-size: 0.92em;
+}
+.markdown-content th,
+.markdown-content td {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  padding: 0.35em 0.6em;
+  text-align: left;
+}
+.markdown-content th {
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.04);
+}
+/* Inline code (not a fenced block, so it's outside CodeBlock's wrapper). */
+.markdown-content :not(pre) > code {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  padding: 0.15em 0.4em;
+  font-size: 0.88em;
+  font-family: ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace;
+}
+.markdown-content pre code {
+  font-family: ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace;
+}
 
 html,
 body,

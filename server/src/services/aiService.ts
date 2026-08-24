@@ -1,16 +1,18 @@
 import { resolveModel } from "../config/models.js";
-import { ApiError, type AIServiceRequest, type AIServiceResponse, type ErrorCode } from "../types/ai.js";
+import { ApiError, type AIServiceRequest, type ErrorCode, type ModelId } from "../types/ai.js";
 
 const OPENROUTER_CHAT_URL = "https://openrouter.ai/api/v1/chat/completions";
 
 // OpenRouter is the ONLY AI gateway this backend talks to -- no separate
 // Poolside/Google/NVIDIA provider clients. Everything OpenRouter-specific
-// (the endpoint, headers, request/response shape) is isolated to this one
-// module so a future gateway swap only touches this file.
-type OpenRouterChatResponse = {
+// (the endpoint, headers, request/response shape, and its Server-Sent
+// Events chunk format) is isolated to this one module so a future gateway
+// swap only touches this file. Responses are always requested with
+// stream: true and re-emitted to the route layer as plain delta strings --
+// callers never see OpenRouter's own SSE/"choices[0].delta" shape.
+type OpenRouterStreamChunk = {
   choices?: Array<{
-    message?: {
-      role?: string;
+    delta?: {
       content?: string;
     };
   }>;
@@ -35,6 +37,12 @@ const RETRY_DELAY_MS = 1000;
 // retried -- a stall is a "something's actually wrong" signal, not the
 // same "try again in a moment" case a 429 is.
 const REQUEST_TIMEOUT_MS = 45000;
+
+// Once streaming has actually started, a fixed total-duration timeout
+// would unfairly kill a long-but-genuinely-still-arriving response. This
+// instead resets on every chunk, so it only fires if the stream goes
+// silent for this long -- a real stall, not just a long answer.
+const STREAM_IDLE_TIMEOUT_MS = 30000;
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -93,7 +101,13 @@ function getApiKey(): string {
   return key;
 }
 
-async function callOpenRouter(apiKey: string, openRouterModel: string, messages: AIServiceRequest["messages"]) {
+async function callOpenRouter(
+  apiKey: string,
+  openRouterModel: string,
+  messages: AIServiceRequest["messages"],
+  maxTokens?: number,
+  disableReasoning?: boolean,
+) {
   let lastStatus = 0;
   let lastBody = "";
 
@@ -111,7 +125,20 @@ async function callOpenRouter(apiKey: string, openRouterModel: string, messages:
           "HTTP-Referer": "https://github.com/janatawbe/model-switcher-interface",
           "X-Title": "AI Model Switcher",
         },
-        body: JSON.stringify({ model: openRouterModel, messages }),
+        // max_tokens/reasoning are omitted entirely for a normal chat reply
+        // (undefined fields are dropped by JSON.stringify) -- only title
+        // generation passes them, to keep that lightweight background
+        // request cheap, short, and free of chain-of-thought preamble
+        // (some models, e.g. Nemotron, otherwise spend the whole token
+        // budget "thinking out loud" about how to write the title instead
+        // of just answering with it).
+        body: JSON.stringify({
+          model: openRouterModel,
+          messages,
+          stream: true,
+          max_tokens: maxTokens,
+          ...(disableReasoning ? { reasoning: { enabled: false } } : {}),
+        }),
         signal: timeoutController.signal,
       });
     } catch (networkError) {
@@ -180,29 +207,161 @@ function extractRateLimitResetAt(body: string): string | undefined {
   return new Date(resetMs).toISOString();
 }
 
+// The backend's tsconfig has no "DOM" lib (it's Node-only), so the global
+// ReadableStreamReadResult type from lib.dom.d.ts isn't available even
+// though ReadableStreamDefaultReader itself is (declared separately by
+// @types/node for the global fetch API) -- this just names the shape
+// reader.read() actually resolves to.
+type StreamReadResult = { done: boolean; value?: Uint8Array };
+
+// Races a single reader.read() call against an idle timer -- if neither
+// settles first, this is a stall (connection open, but nothing arriving).
+async function readChunkWithTimeout(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  timeoutMs: number,
+): Promise<StreamReadResult> {
+  let timeoutId: ReturnType<typeof setTimeout>;
+  const timeout = new Promise<never>((_resolve, reject) => {
+    timeoutId = setTimeout(() => reject(new Error("STREAM_IDLE_TIMEOUT")), timeoutMs);
+  });
+  try {
+    return await Promise.race([reader.read(), timeout]);
+  } finally {
+    clearTimeout(timeoutId!);
+  }
+}
+
 // The application-level entry point: route handlers call this and never
-// touch OpenRouter directly.
-export async function sendMessage(request: AIServiceRequest): Promise<AIServiceResponse> {
+// touch OpenRouter directly. Calls onDelta once per content fragment as it
+// arrives (true incremental streaming, not a buffer-then-flush); resolves
+// once OpenRouter signals the stream is complete. Throws the same ApiError
+// categories as before for anything that goes wrong establishing the
+// connection (classifyFailure/retry logic is unchanged, see
+// callOpenRouter) -- the only new failure mode is a mid-stream stall,
+// which reuses the existing generic AI_REQUEST_FAILED category rather
+// than inventing a new one the frontend doesn't already know how to show.
+export async function streamMessage(
+  request: AIServiceRequest,
+  onDelta: (delta: string) => void,
+  maxTokens?: number,
+  disableReasoning?: boolean,
+): Promise<void> {
   const apiKey = getApiKey();
   const modelEntry = resolveModel(request.model);
 
-  const response = await callOpenRouter(apiKey, modelEntry.openRouterModel, request.messages);
+  const response = await callOpenRouter(
+    apiKey,
+    modelEntry.openRouterModel,
+    request.messages,
+    maxTokens,
+    disableReasoning,
+  );
 
-  let payload: OpenRouterChatResponse;
-  try {
-    payload = (await response.json()) as OpenRouterChatResponse;
-  } catch (parseError) {
-    console.error(`[aiService] unreadable response body from "${modelEntry.openRouterModel}":`, parseError);
+  const reader = response.body?.getReader();
+  if (!reader) {
     throw new ApiError("INVALID_AI_RESPONSE", "Received an unreadable response from the model.", 502);
   }
 
-  const content = payload.choices?.[0]?.message?.content;
-  if (typeof content !== "string" || content.trim().length === 0) {
-    console.error(`[aiService] empty/invalid content from "${modelEntry.openRouterModel}":`, JSON.stringify(payload));
-    throw new ApiError("INVALID_AI_RESPONSE", "The model returned an empty response.", 502);
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let sawAnyDelta = false;
+
+  while (true) {
+    let result: StreamReadResult;
+    try {
+      result = await readChunkWithTimeout(reader, STREAM_IDLE_TIMEOUT_MS);
+    } catch {
+      await reader.cancel().catch(() => {});
+      console.error(
+        `[aiService] stream from "${modelEntry.openRouterModel}" stalled -- no data for ${STREAM_IDLE_TIMEOUT_MS}ms`,
+      );
+      throw new ApiError("AI_REQUEST_FAILED", "The model stopped responding. Please try again.", 502);
+    }
+
+    if (result.done) break;
+    buffer += decoder.decode(result.value, { stream: true });
+
+    // OpenRouter (like the OpenAI-compatible SSE format it mirrors) sends
+    // one JSON payload per "data: ..." line; the final line is a literal
+    // "data: [DONE]" sentinel rather than a JSON payload.
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed.startsWith("data:")) continue;
+      const payload = trimmed.slice("data:".length).trim();
+      if (payload === "[DONE]") continue;
+
+      let parsed: OpenRouterStreamChunk;
+      try {
+        parsed = JSON.parse(payload) as OpenRouterStreamChunk;
+      } catch {
+        continue; // a stray non-JSON SSE line (e.g. a keep-alive comment) -- not fatal, just skip it
+      }
+
+      const delta = parsed.choices?.[0]?.delta?.content;
+      if (typeof delta === "string" && delta.length > 0) {
+        sawAnyDelta = true;
+        onDelta(delta);
+      }
+    }
   }
 
-  return {
-    message: { role: "assistant", content },
-  };
+  if (!sawAnyDelta) {
+    console.error(`[aiService] empty stream from "${modelEntry.openRouterModel}" -- no content deltas received`);
+    throw new ApiError("INVALID_AI_RESPONSE", "The model returned an empty response.", 502);
+  }
+}
+
+// Generous enough for a real question/reply to establish the topic, small
+// enough to keep this lightweight -- a title doesn't need the model's
+// entire (possibly long) answer, just enough of it to know what it's about.
+const TITLE_CONTEXT_CHAR_LIMIT = 600;
+// 3-7 words is comfortably under this even with a stray word or two of
+// preamble the model ignores the instruction and adds anyway; kept a bit
+// above the bare minimum since disableReasoning isn't guaranteed to be
+// honored by every provider, and a truncated title is worse than a few
+// extra tokens spent.
+const TITLE_MAX_TOKENS = 30;
+
+function truncateForTitleContext(text: string): string {
+  return text.length > TITLE_CONTEXT_CHAR_LIMIT ? `${text.slice(0, TITLE_CONTEXT_CHAR_LIMIT)}…` : text;
+}
+
+// A small, separate, non-streaming-to-the-caller use of the same
+// streamMessage/callOpenRouter plumbing real chat replies use -- reuses
+// its retry/timeout/error-classification behavior as-is rather than
+// duplicating any of it, just with a tight max_tokens cap and a
+// single-purpose prompt. Uses the conversation's own model (never a
+// different, separately-configured "title model"), consistent with "no
+// separate provider integration." Callers are expected to treat any
+// thrown ApiError as non-fatal to the conversation itself -- this only
+// ever generates a title, never anything the user's chat depends on.
+export async function generateConversationTitle(
+  model: ModelId,
+  userText: string,
+  assistantText: string,
+): Promise<string> {
+  const prompt = [
+    "Summarize the topic of this conversation as a short title, 3 to 7 words, in Title Case.",
+    'It should read like something a person would naturally name the conversation (for example: "Fix React Authentication Bug" or "Paris Trip Planning").',
+    'Do not use quotation marks. Do not end with punctuation. Do not include words like "Chat", "Conversation", or "Discussion" unless they are genuinely part of the topic.',
+    "Do not mention the name of any AI model or assistant.",
+    "Do not show any reasoning or thinking -- reply with only the title itself, nothing before or after it.",
+    "",
+    `User: ${truncateForTitleContext(userText)}`,
+    `Assistant: ${truncateForTitleContext(assistantText)}`,
+  ].join("\n");
+
+  let title = "";
+  await streamMessage(
+    { model, messages: [{ role: "user", content: prompt }] },
+    (delta) => {
+      title += delta;
+    },
+    TITLE_MAX_TOKENS,
+    true, // disableReasoning
+  );
+
+  return title.trim();
 }
