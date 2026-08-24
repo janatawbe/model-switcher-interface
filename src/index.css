@@ -100,6 +100,12 @@ html,
 body,
 #root {
   height: 100%;
+  /* Every screen in this app is already built to fit its own viewport
+     (Aurora clips itself, message/code content scrolls internally,
+     bubbles/tables wrap or scroll rather than stretch) -- this is a
+     backstop against the one-off case, not a fix in place of those, so
+     nothing here should ever actually need to scroll horizontally. */
+  overflow-x: hidden;
 }
 
 :root {

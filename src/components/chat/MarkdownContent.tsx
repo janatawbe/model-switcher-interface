@@ -77,6 +77,19 @@ function CodeBlock({ children, ...props }: ComponentPropsWithoutRef<"pre">) {
   );
 }
 
+// A wide table (many columns) doesn't wrap the way prose does -- without
+// this, it would force the whole bubble (and the page along with it)
+// horizontally wider than the viewport instead of scrolling in place,
+// the same failure mode a code block would have without its own
+// overflow-x-auto above.
+function Table(props: ComponentPropsWithoutRef<"table">) {
+  return (
+    <div className="my-2 overflow-x-auto">
+      <table {...props} />
+    </div>
+  );
+}
+
 function extractText(node: unknown): string {
   if (typeof node === "string") return node;
   if (typeof node === "number") return String(node);
@@ -99,7 +112,7 @@ export function MarkdownContent({ content }: MarkdownContentProps) {
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         rehypePlugins={[[rehypeHighlight, rehypeHighlightOptions]]}
-        components={{ pre: CodeBlock }}
+        components={{ pre: CodeBlock, table: Table }}
       >
         {content}
       </ReactMarkdown>

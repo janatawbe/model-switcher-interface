@@ -63,7 +63,12 @@ export function MessageBubble({ message, grouped, isLatest, onRetry, onRegenerat
         )}
       </div>
 
-      <div className={`flex max-w-[65%] flex-col gap-1.5 ${isUser ? "items-end" : "items-start"}`}>
+      {/* 65% only reads as a comfortable conversational width once there's
+          enough space for it to still be a generous line length -- on a
+          360px phone that's ~230px, uncomfortably narrow. Scaling the cap
+          up as the viewport shrinks keeps the wrapped line length roughly
+          similar across sizes instead of an ever-narrower column. */}
+      <div className={`flex max-w-[88%] min-w-0 flex-col gap-1.5 sm:max-w-[80%] lg:max-w-[65%] ${isUser ? "items-end" : "items-start"}`}>
         {!isUser && !grouped && (
           <span className={`flex items-center gap-1.5 px-1 text-[11px] font-medium tracking-wider transition-colors duration-300 ${model?.accent.text ?? "text-neutral-400"}`}>
             <span className={`h-1.5 w-1.5 rounded-full transition-colors duration-300 ${model?.accent.dot ?? "bg-neutral-500"}`} />
@@ -71,7 +76,7 @@ export function MessageBubble({ message, grouped, isLatest, onRetry, onRegenerat
           </span>
         )}
         <div
-          className={`min-w-0 rounded-2xl px-4 py-2.5 text-[15px] leading-relaxed ${
+          className={`min-w-0 max-w-full break-words rounded-2xl px-4 py-2.5 text-[15px] leading-relaxed ${
             isUser
               ? "whitespace-pre-wrap rounded-tr-sm border border-white/10 bg-white/[0.08] text-neutral-100 backdrop-blur-sm"
               : `rounded-tl-sm border bg-white/[0.055] py-3 text-neutral-100 backdrop-blur-sm transition-colors duration-300 ${model?.accent.border ?? "border-white/10"}`

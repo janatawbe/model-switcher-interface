@@ -53,11 +53,14 @@ export function MessageInput({ selectedModel, onSend, disabled }: MessageInputPr
   const canSend = Boolean(value.trim()) && !disabled && selectedModel !== null;
 
   return (
-    <div className="shrink-0 px-6 py-4">
+    <div className="shrink-0 px-3 py-3 sm:px-6 sm:py-4">
+      {/* Same max-w-3xl as MessageList, so the composer lines up under the
+          conversation above it instead of stretching wider on large
+          desktop while the messages it's replying to stay narrower. */}
       <div
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
-        className={`flex items-end gap-3 rounded-2xl ${glass.raised} px-4 py-3 ring-0 transition-[box-shadow,border-color] duration-300 focus-within:border-white/[0.16] focus-within:ring-4 ${model?.accent.focusRing ?? ""} ${focused ? model?.accent.glow ?? "" : ""}`}
+        className={`mx-auto flex w-full max-w-3xl items-end gap-2 rounded-2xl ${glass.raised} px-3 py-2.5 ring-0 transition-[box-shadow,border-color] duration-300 focus-within:border-white/[0.16] focus-within:ring-4 sm:gap-3 sm:px-4 sm:py-3 ${model?.accent.focusRing ?? ""} ${focused ? model?.accent.glow ?? "" : ""}`}
       >
         <textarea
           ref={textareaRef}
@@ -67,7 +70,7 @@ export function MessageInput({ selectedModel, onSend, disabled }: MessageInputPr
           placeholder={selectedModel ? "Ask anything..." : "Choose a model to begin..."}
           rows={1}
           aria-label="Message"
-          className="max-h-40 flex-1 resize-none overflow-y-auto bg-transparent text-[15px] text-neutral-100 outline-none placeholder:text-neutral-500"
+          className="max-h-40 min-w-0 flex-1 resize-none overflow-y-auto bg-transparent text-[15px] text-neutral-100 outline-none placeholder:text-neutral-500"
         />
         {model && (
           <span className={`hidden select-none text-xs font-medium tracking-wide transition-colors duration-300 sm:inline ${model.accent.text}`}>
