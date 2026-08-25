@@ -54,13 +54,13 @@ export function MessageInput({ selectedModel, onSend, disabled }: MessageInputPr
 
   return (
     <div className="shrink-0 px-3 py-3 sm:px-6 sm:py-4">
-      {/* Same max-w-3xl as MessageList, so the composer lines up under the
-          conversation above it instead of stretching wider on large
-          desktop while the messages it's replying to stay narrower. */}
+      {/* Same max-w-3xl xl:max-w-4xl as MessageList, so the composer lines
+          up under the conversation above it instead of stretching wider on
+          large desktop while the messages it's replying to stay narrower. */}
       <div
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
-        className={`mx-auto flex w-full max-w-3xl items-end gap-2 rounded-2xl ${glass.raised} px-3 py-2.5 ring-0 transition-[box-shadow,border-color] duration-300 focus-within:border-white/[0.16] focus-within:ring-4 sm:gap-3 sm:px-4 sm:py-3 ${model?.accent.focusRing ?? ""} ${focused ? model?.accent.glow ?? "" : ""}`}
+        className={`mx-auto flex w-full max-w-3xl items-end gap-2 rounded-2xl ${glass.raised} px-3 py-2.5 ring-0 transition-[box-shadow,border-color] duration-300 focus-within:border-white/[0.16] focus-within:ring-4 sm:gap-3 sm:px-4 sm:py-3 xl:max-w-4xl ${model?.accent.focusRing ?? ""} ${focused ? model?.accent.glow ?? "" : ""}`}
       >
         <textarea
           ref={textareaRef}
