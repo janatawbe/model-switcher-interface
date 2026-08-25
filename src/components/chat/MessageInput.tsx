@@ -1,3 +1,4 @@
+// Message composer: an auto-growing textarea and send button for the active model.
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { motion } from "motion/react";
 import { ArrowUp } from "lucide-react";

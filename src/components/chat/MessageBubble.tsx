@@ -1,3 +1,4 @@
+// Renders a single chat message bubble, including copy/retry/regenerate actions.
 import { useState } from "react";
 import { motion } from "motion/react";
 import { Check, Copy, RotateCcw, User } from "lucide-react";

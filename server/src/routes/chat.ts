@@ -1,3 +1,4 @@
+// Handles chat requests, streaming responses back to the client as newline-delimited JSON.
 import { Router } from "express";
 import { streamMessage } from "../services/aiService.js";
 import { ApiError } from "../types/ai.js";

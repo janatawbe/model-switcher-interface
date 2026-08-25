@@ -1,3 +1,4 @@
+// Endpoint for generating an automatic conversation title from its first exchange.
 import { Router } from "express";
 import { generateConversationTitle } from "../services/aiService.js";
 import { validateTitleRequest } from "../validation.js";

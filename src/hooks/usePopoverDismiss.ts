@@ -1,3 +1,4 @@
+// Closes a popover on an outside click or the Escape key.
 import { useEffect, type RefObject } from "react";
 
 // Shared by every trigger+portalled-popover control in this app

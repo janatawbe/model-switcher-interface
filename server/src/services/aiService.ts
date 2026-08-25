@@ -1,3 +1,5 @@
+// Handles all OpenRouter communication: streaming chat completions, retries,
+// timeouts, provider error classification, and automatic title generation.
 import { resolveModel } from "../config/models.js";
 import { ApiError, type AIServiceRequest, type ErrorCode, type ModelId } from "../types/ai.js";
 

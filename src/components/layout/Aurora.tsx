@@ -1,3 +1,4 @@
+// Renders the animated WebGL2 background, blending model colors on hover/selection.
 import { useEffect, useRef, useState } from "react";
 import { MODELS, getModelIndex } from "../ui/models";
 import { AURORA_FRAGMENT_SHADER, AURORA_VERTEX_SHADER } from "./auroraShaders";

@@ -1,3 +1,4 @@
+// Defines the visual glyphs used by the available AI models.
 import { useId } from "react";
 
 // Real, recognizable brand marks for each provider (not generic icon-library

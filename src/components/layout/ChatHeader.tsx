@@ -1,3 +1,4 @@
+// Chat area header: shows the active conversation title and the model selector.
 import { ModelSelector } from "../ui/ModelSelector";
 
 type ChatHeaderProps = {

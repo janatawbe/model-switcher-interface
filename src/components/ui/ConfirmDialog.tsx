@@ -1,3 +1,4 @@
+// Shared portal/backdrop dialog used by the app's confirmation prompts.
 import { useEffect, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { motion } from "motion/react";

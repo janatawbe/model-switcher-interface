@@ -1,3 +1,4 @@
+// Renders assistant message markdown with syntax-highlighted, copyable code blocks and scrollable tables.
 import { useState, type ComponentPropsWithoutRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";

@@ -1,3 +1,4 @@
+// Defines the available AI models and their display metadata.
 import type { ReactElement } from "react";
 import { MiniMaxGlyph, NvidiaGlyph, PoolsideGlyph, type ModelGlyphProps } from "./ModelGlyphs";
 

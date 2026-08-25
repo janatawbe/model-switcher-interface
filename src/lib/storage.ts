@@ -1,3 +1,4 @@
+// Reads and writes the conversation history to localStorage, validating saved data.
 import type { Conversation, Message } from "../types/chat";
 
 // Namespaced and versioned so it never collides with anything else that

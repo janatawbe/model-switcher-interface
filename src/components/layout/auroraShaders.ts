@@ -1,3 +1,4 @@
+// GLSL vertex/fragment shader source for the Aurora background's WebGL2 field.
 export const AURORA_VERTEX_SHADER = `#version 300 es
 in vec2 a_position;
 out vec2 v_uv;
