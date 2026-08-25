@@ -140,6 +140,15 @@ function sanitizeGeneratedTitle(raw: string): string | null {
   return cleaned;
 }
 
+// Shared by restoreInitialState and handleDeleteConversation -- both need
+// "whichever conversation was touched last" as the fallback to land on.
+function findMostRecentConversation(conversations: Conversation[]): Conversation | null {
+  return conversations.reduce<Conversation | null>(
+    (latest, c) => (!latest || c.updatedAt > latest.updatedAt ? c : latest),
+    null,
+  );
+}
+
 // Read once, synchronously, on module init -- both pieces of restored
 // state (the conversations and which one was active) come from the same
 // snapshot, and a conversation only ever gets created once it has at
@@ -154,11 +163,7 @@ function restoreInitialState() {
   if (activeConversationId && conversations.some((c) => c.id === activeConversationId)) {
     return { conversations, activeConversationId };
   }
-  const mostRecent = conversations.reduce<Conversation | null>(
-    (latest, c) => (!latest || c.updatedAt > latest.updatedAt ? c : latest),
-    null,
-  );
-  return { conversations, activeConversationId: mostRecent?.id ?? null };
+  return { conversations, activeConversationId: findMostRecentConversation(conversations)?.id ?? null };
 }
 
 function App() {
@@ -214,40 +219,34 @@ function App() {
     return () => clearTimeout(saveTimeoutRef.current);
   }, [conversations, activeConversationId]);
 
+  // Shared by every write below that targets exactly one conversation by
+  // id -- a harmless no-op if that conversation was since deleted or
+  // switched away from, since .map simply matches nothing.
+  const updateConversation = (conversationId: string, updater: (c: Conversation) => Conversation) => {
+    setConversations((prev) => prev.map((c) => (c.id === conversationId ? updater(c) : c)));
+  };
+
   const appendToConversation = (conversationId: string, next: Message[]) => {
-    setConversations((prev) =>
-      prev.map((c) =>
-        c.id === conversationId ? { ...c, messages: next, updatedAt: new Date().toISOString() } : c,
-      ),
-    );
+    updateConversation(conversationId, (c) => ({ ...c, messages: next, updatedAt: new Date().toISOString() }));
   };
 
   // Updates one message's content in place without touching updatedAt or
-  // any other message -- used to grow a streaming message as chunks
-  // arrive. Always resolves conversationId/messageId through .map, so
-  // (like appendToConversation) it's a harmless no-op if the conversation
-  // was since deleted or the message id doesn't match anything.
+  // any other message -- used to grow a streaming message as chunks arrive.
   const updateMessageContent = (conversationId: string, messageId: string, content: string) => {
-    setConversations((prev) =>
-      prev.map((c) =>
-        c.id === conversationId
-          ? { ...c, messages: c.messages.map((m) => (m.id === messageId ? { ...m, content } : m)) }
-          : c,
-      ),
-    );
+    updateConversation(conversationId, (c) => ({
+      ...c,
+      messages: c.messages.map((m) => (m.id === messageId ? { ...m, content } : m)),
+    }));
   };
 
   // Clears isStreaming on one message once its stream has settled
   // (successfully or not) -- separate from updateMessageContent so the
   // final "done" transition doesn't need to also know the final content.
   const markMessageSettled = (conversationId: string, messageId: string) => {
-    setConversations((prev) =>
-      prev.map((c) =>
-        c.id === conversationId
-          ? { ...c, messages: c.messages.map((m) => (m.id === messageId ? { ...m, isStreaming: false } : m)) }
-          : c,
-      ),
-    );
+    updateConversation(conversationId, (c) => ({
+      ...c,
+      messages: c.messages.map((m) => (m.id === messageId ? { ...m, isStreaming: false } : m)),
+    }));
   };
 
   // Fire-and-forget: called once, right after a conversation's first real
@@ -584,11 +583,7 @@ function App() {
 
     // Deleted the active conversation -- land on the next most recently
     // updated survivor, or the true Welcome screen if none are left.
-    const nextActive = remaining.reduce<Conversation | null>(
-      (latest, c) => (!latest || c.updatedAt > latest.updatedAt ? c : latest),
-      null,
-    );
-    setActiveConversationId(nextActive?.id ?? null);
+    setActiveConversationId(findMostRecentConversation(remaining)?.id ?? null);
     setDraftModel(null);
     setPendingModel(null);
   };

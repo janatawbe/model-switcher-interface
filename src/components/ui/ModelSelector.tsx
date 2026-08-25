@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { Check, ChevronDown } from "lucide-react";
 import { MODELS, getModel } from "./models";
 import { glass } from "./theme";
+import { usePopoverDismiss } from "../../hooks/usePopoverDismiss";
 
 type ModelSelectorProps = {
   selectedModel: string | null;
@@ -30,26 +31,7 @@ export function ModelSelector({ selectedModel, onSelectModel, onPreviewModel }: 
     if (!open) onPreviewModel?.(null);
   }, [open, onPreviewModel]);
 
-  useEffect(() => {
-    if (!open) return;
-
-    const handlePointerDown = (event: MouseEvent) => {
-      const target = event.target as Node;
-      const clickedTrigger = triggerRef.current?.contains(target);
-      const clickedPanel = panelRef.current?.contains(target);
-      if (!clickedTrigger && !clickedPanel) setOpen(false);
-    };
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpen(false);
-    };
-
-    document.addEventListener("mousedown", handlePointerDown);
-    document.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.removeEventListener("mousedown", handlePointerDown);
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [open]);
+  usePopoverDismiss(open, () => setOpen(false), triggerRef, panelRef);
 
   return (
     <div className="relative">
