@@ -8,22 +8,17 @@ type ConfirmDialogProps = {
   headingId: string;
   heading: string;
   description: ReactNode;
-  // Whatever sits above the heading -- an icon (delete) or a richer
-  // visualization (the from/to model row on the switch-model dialog).
+  // Icon or visual shown above the heading.
   topContent: ReactNode;
   cancelLabel: string;
   confirmLabel: string;
-  // Only the confirm button's styling varies per caller (red for a
-  // destructive delete, the target model's own accent for a switch).
+  // Confirm button styling, e.g. red for delete, model accent for switch.
   confirmClassName: string;
   onConfirm: () => void;
   onCancel: () => void;
 };
 
-// Shared "explicit confirmation, not a native confirm()" treatment for
-// every consequential action in this app -- switching models mid-chat and
-// deleting a conversation both need the same portal/backdrop/Escape-to-cancel
-// pattern, so it lives here once instead of being copied per caller.
+// Shared confirmation dialog used before consequential actions.
 export function ConfirmDialog({
   headingId,
   heading,
@@ -70,8 +65,7 @@ export function ConfirmDialog({
         </h2>
         <p className="mt-1.5 text-sm leading-relaxed text-neutral-400">{description}</p>
 
-        {/* items-stretch + matching flex-centering inside each button
-            guarantees identical size for both regardless of label length. */}
+        {/* Keeps both buttons the same size regardless of label length. */}
         <div className="mt-5 flex items-stretch gap-2.5">
           <button
             type="button"

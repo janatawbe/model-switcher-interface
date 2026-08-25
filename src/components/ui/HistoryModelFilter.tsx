@@ -12,12 +12,7 @@ type HistoryModelFilterProps = {
   onChange: (modelId: string) => void;
 };
 
-// The sidebar's "which conversations am I looking at" filter -- same
-// trigger+portalled-popover pattern as ModelSelector (the header's "which
-// model am I talking to" control), just anchored from its left edge and
-// without the provider subtitle line, since this lives in a much
-// narrower 256px column and is choosing among an already-familiar set of
-// four options rather than introducing a new one.
+// Same trigger+popover pattern as ModelSelector, anchored to the left edge.
 export function HistoryModelFilter({ value, onChange }: HistoryModelFilterProps) {
   const [open, setOpen] = useState(false);
   const [coords, setCoords] = useState<{ top: number; left: number } | null>(null);

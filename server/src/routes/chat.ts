@@ -1,4 +1,4 @@
-// Handles chat requests, streaming responses back to the client as newline-delimited JSON.
+// Handles chat requests and streams responses to the client.
 import { Router } from "express";
 import { streamMessage } from "../services/aiService.js";
 import { ApiError } from "../types/ai.js";
@@ -6,23 +6,9 @@ import { validateChatRequest } from "../validation.js";
 
 export const chatRouter = Router();
 
-// Route -> AI service -> OpenRouter. This handler never talks to
-// OpenRouter itself -- it only validates the request and relays delta
-// chunks as they arrive.
-//
-// The response is one JSON object per line (newline-delimited, not a
-// single JSON body): {"type":"chunk","content":...} for each fragment,
-// then either {"type":"done"} or {"type":"error",...}. Nothing is ever
-// buffered and flushed as a whole -- each chunk is written to the client
-// as soon as streamMessage's callback fires.
-//
-// Headers are only switched to the streaming content type once the first
-// chunk actually arrives (see headerSet below). Until then, res.headersSent
-// is still false, so a failure that happens before any content ever
-// arrives (rate limit, model unavailable, auth, etc.) falls through to
-// next(error) and produces the exact same JSON error response this route
-// always has -- existing frontend error handling doesn't need to know
-// streaming exists at all for that path.
+// Validates the request, then relays each streamed chunk as newline-delimited JSON.
+// Headers switch to streaming mode only once the first chunk arrives, so an
+// early failure still returns a normal JSON error response.
 chatRouter.post("/chat", async (req, res, next) => {
   try {
     const chatRequest = validateChatRequest(req.body);
@@ -41,11 +27,7 @@ chatRouter.post("/chat", async (req, res, next) => {
     res.end();
   } catch (error) {
     if (res.headersSent) {
-      // Streaming had already started -- can't send a fresh HTTP error
-      // status at this point, so the failure is reported as a terminal
-      // event inside the still-open stream instead. The frontend treats
-      // this identically to a pre-stream error (same code/message/resetAt
-      // shape), it just arrives a different way.
+      // Streaming has started, so send the error through the active stream.
       const apiError = error instanceof ApiError ? error : null;
       res.write(
         `${JSON.stringify({

@@ -5,18 +5,9 @@ export type Message = {
   content: string;
   model?: string;
   createdAt: string;
-  // A locally-generated failure notice (e.g. "Something went wrong reaching
-  // the model"), not a real reply from the model. Displayed identically to
-  // any other assistant bubble, but excluded when building the message
-  // history sent back to the model on the next turn -- otherwise it would
-  // look like the model actually said that.
+  // A local failure notice, excluded from context sent to the model.
   isError?: boolean;
-  // True only while a streaming response is still actively receiving
-  // content -- cleared once the stream completes. Purely a rendering hint
-  // (suppresses the separate "waiting for a reply" indicator once real
-  // content is visible, and gates the Regenerate/Copy actions); never
-  // meaningful to rely on after a page reload, since in-flight requests
-  // aren't restored.
+  // True while a reply is still streaming in.
   isStreaming?: boolean;
 };
 
@@ -27,11 +18,6 @@ export type Conversation = {
   messages: Message[];
   createdAt: string;
   updatedAt: string;
-  // True once the title should never be auto-changed again -- set either
-  // by a successful (or exhausted) automatic title-generation pass after
-  // the first exchange, or immediately by a manual rename. Conversations
-  // restored from before this field existed simply come back as
-  // undefined/falsy, which correctly means "still eligible for automatic
-  // title generation."
+  // True once the title is locked and won't be auto-generated again.
   titleFinal?: boolean;
 };

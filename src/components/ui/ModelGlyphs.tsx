@@ -1,22 +1,13 @@
 // Defines the visual glyphs used by the available AI models.
 import { useId } from "react";
 
-// Real, recognizable brand marks for each provider (not generic icon-library
-// glyphs) so a model is instantly identifiable by its actual logo everywhere
-// it appears. Path data from @lobehub/icons-static-svg (MIT licensed,
-// single-color "mark" variants) so they tint cleanly via currentColor to
-// match this app's own per-model accent color.
+// Real provider logos, tinted via currentColor to match each model's accent.
 export type ModelGlyphProps = {
   size?: number;
   className?: string;
 };
 
-// Poolside's mark ships as three overlapping soft-edged gradient shapes
-// (each fading via its own linearGradient) rather than a flat path, so its
-// gradient/mask/clipPath ids need to be unique per render or two
-// simultaneous instances (e.g. the welcome card and the header selector
-// open at once) would fight over the same SVG ids and one would render
-// blank.
+// Uses unique gradient/mask ids so multiple instances don't clash.
 export function PoolsideGlyph({ size = 16, className }: ModelGlyphProps) {
   const uid = useId();
   const clipId = `poolside-clip-${uid}`;

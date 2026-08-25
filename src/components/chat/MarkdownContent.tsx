@@ -9,22 +9,12 @@ type MarkdownContentProps = {
   content: string;
 };
 
-// rehype-highlight's default language set (lowlight's "common" bundle)
-// already covers every language this app needs to support (JS, TS,
-// Python, Java, C/C++, HTML, CSS, JSON, Bash, SQL, Markdown) -- only
-// JSX/TSX need an explicit alias, since they aren't distinct highlight.js
-// grammars and otherwise wouldn't be recognized by that exact fence name;
-// they're aliased onto the JS/TS tokenizers, which already handle
-// embedded tag syntax reasonably.
+// Maps JSX/TSX fences onto the JS/TS highlighters.
 const rehypeHighlightOptions = {
   aliases: { jsx: "javascript", tsx: "typescript" },
 };
 
-// A small, unobtrusive copy affordance for one fenced code block --
-// separate from the message-level Copy action (see MessageBubble) since a
-// long reply often has several distinct snippets a user wants
-// independently, and copying the whole message would include prose
-// around them.
+// Copies just this one code block, separate from the message-level Copy.
 function CodeBlockCopyButton({ code }: { code: string }) {
   const [copied, setCopied] = useState(false);
 
@@ -50,13 +40,7 @@ function CodeBlockCopyButton({ code }: { code: string }) {
   );
 }
 
-// Renders a fenced code block's language label + copy button above the
-// actual highlighted <pre><code>. rehype-highlight attaches a
-// "language-xxx" class to the inner <code> element for any block with a
-// detected/declared language, which is where the label below reads from --
-// content itself (the raw text passed to react-markdown) is never touched,
-// so what's stored in conversation history stays exactly what the model
-// sent.
+// Adds a language label and copy button above a highlighted code block.
 function CodeBlock({ children, ...props }: ComponentPropsWithoutRef<"pre">) {
   const codeElement = children as { props?: { className?: string; children?: unknown } } | undefined;
   const className = codeElement?.props?.className ?? "";
@@ -78,11 +62,7 @@ function CodeBlock({ children, ...props }: ComponentPropsWithoutRef<"pre">) {
   );
 }
 
-// A wide table (many columns) doesn't wrap the way prose does -- without
-// this, it would force the whole bubble (and the page along with it)
-// horizontally wider than the viewport instead of scrolling in place,
-// the same failure mode a code block would have without its own
-// overflow-x-auto above.
+// Wraps wide tables so they scroll instead of overflowing the page.
 function Table(props: ComponentPropsWithoutRef<"table">) {
   return (
     <div className="my-2 overflow-x-auto">
@@ -101,12 +81,7 @@ function extractText(node: unknown): string {
   return "";
 }
 
-// Assistant messages only (see MessageBubble) -- user input stays plain
-// text. Streaming-safe: react-markdown just re-parses whatever content
-// string it's given on every render, so a still-growing response (an
-// unclosed code fence, a half-written list) renders its best-effort
-// interpretation of the partial text and naturally resolves to the final
-// rendering once the stream completes, with no special-casing needed here.
+// Re-renders on every change, so it works safely with streaming content.
 export function MarkdownContent({ content }: MarkdownContentProps) {
   return (
     <div className="markdown-content">

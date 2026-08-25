@@ -1,5 +1,4 @@
-// Root application component: owns conversation state, persistence, model
-// switching, and the request/streaming lifecycle for chat messages.
+// Owns conversation state, persistence, model switching, and chat requests.
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence } from "motion/react";
 import type { Conversation, Message } from "./types/chat";
@@ -12,21 +11,13 @@ type ChatApiErrorBody = {
   error?: { code?: string; message?: string; resetAt?: string };
 };
 
-// The three event shapes /api/chat's streamed (newline-delimited JSON)
-// response can send once it commits to streaming. Mirrors the backend's
-// routes/chat.ts exactly -- see there for why a mid-stream failure arrives
-// as an "error" event instead of a normal HTTP error status.
+// Event shapes sent by /api/chat's streamed response.
 type ChatStreamEvent =
   | { type: "chunk"; content: string; model: string }
   | { type: "done" }
   | { type: "error"; code?: string; message?: string; resetAt?: string };
 
-// Turns a reset timestamp into a short, safe phrase -- "in about 45
-// seconds" for a near-term reset, "after 2:35 PM" (optionally "tomorrow")
-// for a same-/next-day one. Returns null whenever the timestamp can't be
-// trusted (already passed, or far enough out that a bare clock time would
-// be ambiguous) so the caller can fall back to the generic message instead
-// of showing something potentially misleading.
+// Turns a reset timestamp into a short phrase like "in about 45 seconds".
 function formatRetryHint(resetAtIso: string): string | null {
   const resetMs = Date.parse(resetAtIso);
   if (!Number.isFinite(resetMs)) return null;
@@ -58,11 +49,7 @@ function formatRetryHint(resetAtIso: string): string | null {
   return isSameDay ? `after ${timeLabel}` : `after ${timeLabel} tomorrow`;
 }
 
-// Maps our backend's error categories (see server/src/types/ai.ts) to a
-// calm, model-aware sentence for the chat bubble -- never the raw
-// provider response. Works for any model automatically since it's keyed
-// off the error code, not the model itself; anything not explicitly
-// classified below keeps the original generic fallback.
+// Maps a backend error code to a calm, model-aware message for the bubble.
 function describeFailure(code: string | undefined, modelId: string, resetAt?: string): string {
   const label = getModelLabel(modelId);
   switch (code) {
@@ -85,21 +72,10 @@ function describeFailure(code: string | undefined, modelId: string, resetAt?: st
 }
 
 const MAX_TITLE_LENGTH = 60;
-// A background nicety, not something the user is waiting on -- gives up
-// and keeps the existing fallback title well before the shared chat
-// timeout/retry budget would, rather than making a rate-limited or slow
-// provider hold up the title for as long as a real chat reply might take.
+// Background title generation shouldn't hold things up as long as a real reply would.
 const TITLE_REQUEST_TIMEOUT_MS = 20000;
 
-// The conversation's title the instant it's created -- entirely local (no
-// model call), so there's always something reasonable in the sidebar
-// immediately, before the first exchange has even finished. Deliberately
-// just cleans and truncates rather than attempting a semantic rewrite -- a
-// regex-based "rewrite" would mangle arbitrary phrasing/grammar
-// unpredictably, which is worse than a faithful (if plain) excerpt of what
-// the user actually typed. This is also the permanent fallback: if the
-// context-aware title request (see requestTitleGeneration below) fails or
-// times out, this is what the conversation keeps.
+// Local, instant fallback title; stays if automatic title generation fails.
 function deriveFallbackTitle(rawContent: string): string {
   const cleaned = rawContent.replace(/\s+/g, " ").trim();
   if (!cleaned) return "New Conversation";
@@ -107,43 +83,27 @@ function deriveFallbackTitle(rawContent: string): string {
 
   const truncated = cleaned.slice(0, MAX_TITLE_LENGTH);
   const lastSpace = truncated.lastIndexOf(" ");
-  // Only break on a word boundary if it doesn't throw away most of the
-  // budget -- otherwise a title with one long leading word would get cut
-  // down to almost nothing.
+  // Break on a word boundary unless that would cut off too much.
   const boundary = lastSpace > 20 ? truncated.slice(0, lastSpace) : truncated;
   return `${boundary.trimEnd()}…`;
 }
 
-// Some models narrate their own instructions instead of just following
-// them (observed live from a reasoning-style model: replying "We need to
-// produce a short title, 3-7 words..." instead of an actual title) --
-// none of these openers belong at the start of a real topic title, so
-// catching them here is a safe backstop on top of the backend's own
-// disableReasoning request flag, not something likely to reject a
-// genuine title by mistake.
+// Catches models that narrate their reasoning instead of giving a title.
 const REASONING_PREAMBLE_PATTERN =
   /^(we need to|let me|i should|i'll|i will|first,|okay,|sure,|the title is|here is|here's|this conversation is about)\b/i;
 
-// Cleans up whatever the title-generation model actually replied with --
-// despite the prompt's instructions, it can still wrap the title in
-// quotes, add a trailing period, or (rarely) ignore the "only the title"
-// instruction entirely. Returns null for anything that doesn't look like a
-// real, usable title, so the caller can keep the existing fallback instead
-// of showing something clearly wrong.
+// Cleans up a generated title; returns null if it doesn't look usable.
 function sanitizeGeneratedTitle(raw: string): string | null {
   let cleaned = raw.trim();
   cleaned = cleaned.replace(/^["'“”‘’]+|["'“”‘’]+$/g, "").trim();
   cleaned = cleaned.replace(/[.!?]+$/, "").trim();
-  // A real title is one short line -- multiple lines/sentences means the
-  // model explained itself instead of just answering with the title, and
-  // an implausibly long reply means the same thing.
+  // A real title is one short line.
   if (!cleaned || cleaned.includes("\n") || cleaned.length > 80) return null;
   if (REASONING_PREAMBLE_PATTERN.test(cleaned)) return null;
   return cleaned;
 }
 
-// Shared by restoreInitialState and handleDeleteConversation -- both need
-// "whichever conversation was touched last" as the fallback to land on.
+// Finds the most recently updated conversation, used as a fallback to land on.
 function findMostRecentConversation(conversations: Conversation[]): Conversation | null {
   return conversations.reduce<Conversation | null>(
     (latest, c) => (!latest || c.updatedAt > latest.updatedAt ? c : latest),
@@ -151,15 +111,7 @@ function findMostRecentConversation(conversations: Conversation[]): Conversation
   );
 }
 
-// Read once, synchronously, on module init -- both pieces of restored
-// state (the conversations and which one was active) come from the same
-// snapshot, and a conversation only ever gets created once it has at
-// least one message (see handleSendMessage), so an active id that no
-// longer resolves to anything in the array means "nothing to restore",
-// not "corrupt". If the saved active id doesn't resolve, fall back to
-// the most recently updated conversation (if any exist) rather than a
-// blank welcome screen, so restored history stays reachable through the
-// sidebar instead of stranding it behind a screen that can't show it.
+// Restores saved conversations; falls back to the most recent one if needed.
 function restoreInitialState() {
   const { conversations, activeConversationId } = loadState();
   if (activeConversationId && conversations.some((c) => c.id === activeConversationId)) {
@@ -172,29 +124,13 @@ function App() {
   const [initial] = useState(restoreInitialState);
   const [conversations, setConversations] = useState<Conversation[]>(initial.conversations);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(initial.activeConversationId);
-  // A model chosen before any message has been sent -- nothing worth
-  // persisting yet, so it lives here rather than as a Conversation until
-  // the first message materializes one (see handleSendMessage).
+  // Model chosen before any message is sent; not yet a real conversation.
   const [draftModel, setDraftModel] = useState<string | null>(null);
-  // Which conversations currently have a request in flight -- keyed by
-  // conversation id rather than a single flag, since a request keeps
-  // running in the background after the user switches away from it (see
-  // requestAssistantReply), and a later-finishing unrelated request must
-  // never be able to clear the loading indicator for whichever
-  // conversation happens to be active *now*. The visible "isTyping" below
-  // is just membership of the currently active conversation in this set,
-  // so switching to/from a conversation always reflects its own real
-  // in-flight status with no manual bookkeeping needed elsewhere.
+  // Conversations with a request in flight, keyed by id.
   const [pendingConversationIds, setPendingConversationIds] = useState<Set<string>>(new Set());
-  // Mirrors pendingConversationIds but read/written synchronously, purely
-  // to reject a second send for the same conversation (or the same draft)
-  // that arrives before React has re-rendered with the disabled input --
-  // e.g. a rapid double Enter/click in the same tick. State updates alone
-  // can't guarantee that render has happened yet; this ref can.
+  // Synchronous guard against double-sends before React re-renders.
   const sendGuardRef = useRef<Set<string>>(new Set());
-  // A model the user picked while a conversation was already in progress --
-  // held here until they confirm, rather than switched immediately, so an
-  // in-progress chat is never silently reattributed to a different model.
+  // Model picked mid-conversation, held until the user confirms the switch.
   const [pendingModel, setPendingModel] = useState<string | null>(null);
 
   const activeConversation = conversations.find((c) => c.id === activeConversationId) ?? null;
@@ -202,16 +138,7 @@ function App() {
   const messages = activeConversation?.messages ?? [];
   const isTyping = activeConversationId !== null && pendingConversationIds.has(activeConversationId);
 
-  // The only place conversations are written to localStorage -- fires
-  // when the conversation set or the active id actually changes, not on
-  // every render (draftModel/isTyping/pendingModel churn doesn't touch
-  // this effect's dependencies). Debounced: a streaming response can
-  // update `conversations` many times a second as tokens arrive, and
-  // writing to localStorage synchronously on every single one would be
-  // exactly the "unnecessary write on every render" this app has
-  // deliberately avoided since Milestone 8 -- coalescing rapid updates
-  // into one write ~250ms after they settle keeps that guarantee while
-  // still saving promptly once a burst of activity actually stops.
+  // Saves conversations to localStorage, debounced to avoid writing on every streamed chunk.
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => {
     clearTimeout(saveTimeoutRef.current);
@@ -221,9 +148,7 @@ function App() {
     return () => clearTimeout(saveTimeoutRef.current);
   }, [conversations, activeConversationId]);
 
-  // Shared by every write below that targets exactly one conversation by
-  // id -- a harmless no-op if that conversation was since deleted or
-  // switched away from, since .map simply matches nothing.
+  // Updates one conversation by id; a no-op if it no longer exists.
   const updateConversation = (conversationId: string, updater: (c: Conversation) => Conversation) => {
     setConversations((prev) => prev.map((c) => (c.id === conversationId ? updater(c) : c)));
   };
@@ -232,8 +157,7 @@ function App() {
     updateConversation(conversationId, (c) => ({ ...c, messages: next, updatedAt: new Date().toISOString() }));
   };
 
-  // Updates one message's content in place without touching updatedAt or
-  // any other message -- used to grow a streaming message as chunks arrive.
+  // Grows a streaming message's content in place as chunks arrive.
   const updateMessageContent = (conversationId: string, messageId: string, content: string) => {
     updateConversation(conversationId, (c) => ({
       ...c,
@@ -241,9 +165,7 @@ function App() {
     }));
   };
 
-  // Clears isStreaming on one message once its stream has settled
-  // (successfully or not) -- separate from updateMessageContent so the
-  // final "done" transition doesn't need to also know the final content.
+  // Marks a message as no longer streaming once it settles.
   const markMessageSettled = (conversationId: string, messageId: string) => {
     updateConversation(conversationId, (c) => ({
       ...c,
@@ -251,14 +173,7 @@ function App() {
     }));
   };
 
-  // Fire-and-forget: called once, right after a conversation's first real
-  // (non-error) assistant reply finishes, to upgrade the local
-  // fallback title (already showing in the sidebar since conversation
-  // creation) to a context-aware one. Never blocks or affects the chat
-  // itself -- any failure just leaves the existing title exactly as it
-  // is. Bounded by its own short client-side timeout rather than the
-  // full chat retry budget, since this is a background nicety, not
-  // something the user is waiting on.
+  // Upgrades the fallback title to a generated one; failures are silent.
   const requestTitleGeneration = async (
     conversationId: string,
     model: string,
@@ -268,11 +183,7 @@ function App() {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), TITLE_REQUEST_TIMEOUT_MS);
 
-    // Applied by both the success and failure paths below: only touches
-    // the conversation if its title hasn't already been locked by
-    // something else that happened in the meantime (most notably, the
-    // user manually renaming it while this request was in flight) --
-    // never overwrite a rename that already landed.
+    // Skips the update if the title was already locked (e.g. by a manual rename).
     const finalize = (newTitle?: string) => {
       setConversations((prev) =>
         prev.map((c) =>
@@ -305,41 +216,16 @@ function App() {
     }
   };
 
-  // The only place that actually talks to the backend. `history` is
-  // whatever should be sent as context AND is the exact array the
-  // resulting assistant/error message gets appended onto -- callers
-  // (send and retry) are responsible for making sure it ends with the
-  // one user message this request is answering, so a retry that reuses
-  // this with the same history can never duplicate that user message.
-  // Always writes into `conversationId` specifically (never "whichever
-  // conversation is active when this resolves"), so switching
-  // conversations or models while this is in flight can't misattribute
-  // the eventual response -- if conversationId was since deleted,
-  // appendToConversation's map simply matches nothing and this becomes a
-  // harmless no-op.
+  // Sends a chat request and streams the reply into the given conversation.
   const requestAssistantReply = async (conversationId: string, model: string, history: Message[]) => {
     setPendingConversationIds((prev) => new Set(prev).add(conversationId));
 
-    // Only reassigned once we've actually classified a response from our
-    // own backend -- any other failure (network error, timeout, unreadable
-    // JSON, etc.) leaves this at the safe, generic default.
     let userFacingMessage = "Something went wrong reaching the model. Please try again.";
-    // Set the moment the first chunk creates the streaming message, so the
-    // catch block below can tell "never even got a response" (show a
-    // normal error bubble) apart from "a real, partially-visible response
-    // already exists" (keep it -- don't bury visible content under an
-    // error).
+    // Set once the first chunk arrives, so a later error keeps partial content visible.
     let streamingMessageId: string | null = null;
     let accumulatedContent = "";
 
-    // Marks the streamed message as no longer in-flight, then -- if this
-    // was the conversation's first real (non-error) assistant reply and
-    // its title hasn't been locked yet -- kicks off automatic title
-    // generation in the background. `history` already ends with the one
-    // user message this reply answers (see the function-level comment
-    // above), so checking it for any prior non-error assistant message is
-    // enough to know "is this the first exchange" without re-reading
-    // possibly-stale conversation state.
+    // Settles the message, then triggers title generation if this was the first reply.
     const settleWithRealReply = (targetConversationId: string, messageId: string) => {
       markMessageSettled(targetConversationId, messageId);
       const isFirstReply = !history.some((m) => m.role === "assistant" && !m.isError);
@@ -355,19 +241,13 @@ function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           model,
-          // Error notices are excluded: they're a local UI notice, not
-          // something the model actually said, and sending them back as
-          // context would make the model think it produced that text itself.
+          // Error notices are excluded; they're local UI, not something the model said.
           messages: history.filter((message) => !message.isError).map(({ role, content }) => ({ role, content })),
         }),
       });
 
       if (!response.ok) {
-        // Pre-stream failure -- the backend never committed to streaming,
-        // so this is still a single normal JSON error body, exactly as
-        // before streaming existed. The chat bubble only ever shows a
-        // short, honest category message (see describeFailure); the full
-        // detail a developer needs goes to the console, not the UI.
+        // Pre-stream failure: a normal JSON error body, not a stream event.
         const errorBody = (await response.json().catch(() => null)) as ChatApiErrorBody | null;
         console.error("Chat request failed:", response.status, errorBody);
         userFacingMessage = describeFailure(errorBody?.error?.code, model, errorBody?.error?.resetAt);
@@ -395,7 +275,7 @@ function App() {
           try {
             event = JSON.parse(trimmed) as ChatStreamEvent;
           } catch {
-            continue; // ignore a malformed ndjson line rather than aborting an otherwise-fine stream
+            continue; // skip malformed lines
           }
 
           if (event.type === "chunk") {
@@ -431,10 +311,7 @@ function App() {
       } else if (streamingMessageId) {
         settleWithRealReply(conversationId, streamingMessageId);
       } else {
-        // The backend always sends an "error" event for a stream that
-        // never produced any content, so this shouldn't normally happen --
-        // treated the same as any other failure to reach the model rather
-        // than silently leaving nothing behind.
+        // Shouldn't normally happen; treated like any other failure.
         throw new Error("Empty response stream");
       }
     } catch (error) {
@@ -464,12 +341,7 @@ function App() {
   const handleSendMessage = (content: string) => {
     if (!selectedModel) return;
 
-    // Guards against a second send landing before React has re-rendered
-    // the disabled input -- a plain state check can't catch a same-tick
-    // double Enter/click since the state update that would disable the
-    // UI hasn't been applied yet. Keyed on the conversation about to
-    // receive this message (or a shared sentinel while still a draft,
-    // since a draft has no id of its own until the request below starts).
+    // Blocks a duplicate send before the disabled input re-renders.
     const guardKey = activeConversationId ?? "__draft__";
     if (sendGuardRef.current.has(guardKey)) return;
     sendGuardRef.current.add(guardKey);
@@ -481,17 +353,12 @@ function App() {
       createdAt: new Date().toISOString(),
     };
 
-    // Explicitly built from the current `messages` (existing messages +
-    // the message just created above), not relied on after a state
-    // update -- state updates are async, so re-reading state later could
-    // still see the pre-send value and either drop the new message or,
-    // after a re-render, send it twice.
+    // Built from current state directly, since state updates are async.
     const history = [...messages, userMessage];
 
     let conversationId = activeConversationId;
     if (conversationId === null) {
-      // First message of a fresh draft -- this is the point a
-      // conversation actually gets created and persisted.
+      // First message of a draft creates and persists the conversation.
       conversationId = crypto.randomUUID();
       const now = new Date().toISOString();
       const newConversation: Conversation = {
@@ -514,13 +381,7 @@ function App() {
     });
   };
 
-  // Shared by both "Retry" (on an error bubble) and "Regenerate" (on the
-  // latest successful assistant reply) -- the operation is identical
-  // either way: replace that one assistant message in place rather than
-  // appending alongside it. `history` is everything up to and including
-  // the original triggering user message (the old assistant/error message
-  // itself is excluded), so the new request's result lands right where
-  // the old one was, and the triggering user message is never duplicated.
+  // Used by both Retry and Regenerate: replaces one reply in place.
   const handleRegenerateMessage = (assistantMessageId: string) => {
     if (!activeConversation || !selectedModel) return;
     if (sendGuardRef.current.has(activeConversation.id)) return;
@@ -540,20 +401,14 @@ function App() {
     });
   };
 
-  // Leaves the current conversation (already persisted, since it can only
-  // become active with at least one message in it) untouched in the list
-  // and returns to a fresh draft on the same model. A no-op if already on
-  // an empty draft, so repeated clicks can't create empty duplicates.
+  // Returns to a fresh draft on the same model, without touching history.
   const handleNewChat = () => {
     if (activeConversationId === null) return;
     setDraftModel(activeConversation?.model ?? null);
     setActiveConversationId(null);
   };
 
-  // isTyping is derived from pendingConversationIds, so switching here
-  // automatically shows/hides loading correctly for wherever we land --
-  // no manual reset needed, and (unlike a manual reset) it can't hide a
-  // genuinely still-running request if the user switches back.
+  // isTyping is derived from pendingConversationIds, so loading state follows automatically.
   const handleSelectConversation = (conversationId: string) => {
     if (conversationId === activeConversationId) return;
     setPendingModel(null);
@@ -561,14 +416,7 @@ function App() {
     setActiveConversationId(conversationId);
   };
 
-  // A pure metadata edit -- doesn't touch updatedAt, so renaming a
-  // conversation never reorders the sidebar (matching how it behaves in
-  // most chat apps: only actual conversation activity moves it). Empty or
-  // whitespace-only titles are rejected rather than silently accepted.
-  // Always sets titleFinal, unconditionally -- a manual rename permanently
-  // opts the conversation out of automatic title generation, even if
-  // that happens before the first exchange has finished (or was never
-  // going to run at all, e.g. renaming an older conversation).
+  // Renames without reordering the sidebar; locks out automatic titles.
   const handleRenameConversation = (conversationId: string, newTitle: string) => {
     const cleaned = newTitle.replace(/\s+/g, " ").trim();
     if (!cleaned) return;
@@ -583,19 +431,13 @@ function App() {
 
     if (conversationId !== activeConversationId) return;
 
-    // Deleted the active conversation -- land on the next most recently
-    // updated survivor, or the true Welcome screen if none are left.
+    // Land on the next most recent conversation, or the welcome screen.
     setActiveConversationId(findMostRecentConversation(remaining)?.id ?? null);
     setDraftModel(null);
     setPendingModel(null);
   };
 
-  // The single gate every model-select action passes through (the header
-  // dropdown and the welcome screen's cards both just call this, unchanged).
-  // Switching is only ever immediate when there's nothing to lose yet --
-  // no active conversation, since a conversation is never created without
-  // at least one message in it. Once a conversation actually exists, the
-  // switch is held pending confirmation instead of applied right away.
+  // Switches immediately if there's no active conversation to lose; else asks for confirmation.
   const requestModelSwitch = (modelId: string) => {
     if (modelId === selectedModel) return;
     if (activeConversationId === null) {

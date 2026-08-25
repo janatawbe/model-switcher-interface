@@ -1,9 +1,7 @@
 // Reads and writes the conversation history to localStorage, validating saved data.
 import type { Conversation, Message } from "../types/chat";
 
-// Namespaced and versioned so it never collides with anything else that
-// might use localStorage, and so a future breaking change to the shape
-// can ship under a new key instead of trying to migrate the old one.
+// Versioned key so a future breaking change can use a new key instead of migrating.
 const STORAGE_KEY = "ai-model-switcher:conversations:v1";
 
 export type PersistedState = {
@@ -38,11 +36,7 @@ function isConversation(value: unknown): value is Conversation {
   );
 }
 
-// Reads and validates whatever is in localStorage. Never throws -- a
-// missing key, invalid JSON, or a malformed shape all fall back to a
-// valid empty state instead of surfacing a raw parsing error to the user
-// or crashing the app. A single malformed conversation is dropped rather
-// than discarding everything else that parsed fine.
+// Reads and validates localStorage; falls back to empty state on any error.
 export function loadState(): PersistedState {
   let raw: string | null;
   try {

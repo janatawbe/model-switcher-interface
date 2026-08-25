@@ -21,10 +21,7 @@ function toCss([r, g, b]: [number, number, number]) {
   return `rgb(${Math.round(r * 255)}, ${Math.round(g * 255)}, ${Math.round(b * 255)})`;
 }
 
-// The product's own identity mark: three distinct, model-colored arcs --
-// three perspectives -- connected by thin spokes to one shared hub -- one
-// interface. Not a knot or a sparkle, and not any single model's glyph: a
-// literal three-position switch, which is what this product actually is.
+// Three model-colored arcs on spokes around a shared hub.
 export function BrandMark({ size = 32, variant = "mono", emphasis = null, className = "" }: BrandMarkProps) {
   return (
     <svg viewBox="0 0 100 100" width={size} height={size} className={className} aria-hidden="true">

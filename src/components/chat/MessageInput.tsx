@@ -11,10 +11,7 @@ type MessageInputProps = {
   disabled?: boolean;
 };
 
-// Matches the textarea's existing max-h-40 (10rem) Tailwind class -- kept
-// as a real number here since growing the box to fit its content has to
-// happen imperatively (a textarea's height never tracks its own content
-// through CSS alone), and this is the ceiling that decision is capped at.
+// Matches the textarea's max-h-40 class; height is grown imperatively.
 const MAX_TEXTAREA_HEIGHT_PX = 160;
 
 export function MessageInput({ selectedModel, onSend, disabled }: MessageInputProps) {
@@ -23,13 +20,7 @@ export function MessageInput({ selectedModel, onSend, disabled }: MessageInputPr
   const model = getModel(selectedModel);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Grows the box to fit whatever's actually typed or pasted, capped at
-  // MAX_TEXTAREA_HEIGHT_PX (matching max-h-40 below) where it switches to
-  // its own internal scroll instead of growing further. Resetting to
-  // "auto" first (rather than reading scrollHeight directly against
-  // whatever height is currently set) is what lets this shrink back down
-  // too -- e.g. after Send clears the value, or the user deletes pasted
-  // text -- not just grow.
+  // Grows the textarea to fit its content, up to the max height.
   useEffect(() => {
     const el = textareaRef.current;
     if (!el) return;
@@ -55,9 +46,7 @@ export function MessageInput({ selectedModel, onSend, disabled }: MessageInputPr
 
   return (
     <div className="shrink-0 px-3 py-3 sm:px-6 sm:py-4">
-      {/* Same max-w-3xl xl:max-w-4xl as MessageList, so the composer lines
-          up under the conversation above it instead of stretching wider on
-          large desktop while the messages it's replying to stay narrower. */}
+      {/* Same max width as MessageList, so the composer lines up with messages. */}
       <div
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}

@@ -1,10 +1,6 @@
 // Closes a popover on an outside click or the Escape key.
 import { useEffect, type RefObject } from "react";
 
-// Shared by every trigger+portalled-popover control in this app
-// (ModelSelector, HistoryModelFilter) -- closes the popover on an outside
-// click or Escape, while a click on the trigger itself (which already
-// toggles it) or inside the popover panel is left alone.
 export function usePopoverDismiss(
   open: boolean,
   onDismiss: () => void,

@@ -21,24 +21,14 @@ export function MessageList({ messages, isTyping, selectedModel, onRegenerateMes
     bottomRef.current?.scrollIntoView({ block: "end", behavior: "smooth" });
   }, [messages, isTyping]);
 
-  // Once a streaming reply has actually started, the growing bubble
-  // itself is the "still working" signal -- showing the separate bounce
-  // dots underneath it too would be redundant. The dots are only for the
-  // gap between "request sent" and "first token arrived."
+  // "Thinking..." only shows before the first token arrives.
   const hasStreamingMessage = messages.some((message) => message.isStreaming);
   const showWaitingIndicator = isTyping && !hasStreamingMessage;
   const lastMessageIndex = messages.length - 1;
 
   return (
     <div className="flex h-full flex-col overflow-y-auto px-3 py-4 sm:px-6 sm:py-6">
-      {/* A readable line length matters as much on a 2560px monitor as a
-          360px phone -- without this cap, bubbles would stretch toward
-          their full 65% width against a multi-thousand-pixel-wide
-          container on large desktop, which reads as sparse and hard to
-          scan rather than spacious. The wider xl: cap only kicks in at
-          1280px+ (laptop and up) -- tablet/mobile never reach either cap
-          today since the available width there is already narrower, so
-          this is a no-op for them. */}
+      {/* Caps line width for readability on large screens. */}
       <div className="mx-auto w-full max-w-3xl xl:max-w-4xl">
         {messages.map((message, index) => (
           <MessageBubble

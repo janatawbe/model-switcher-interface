@@ -5,11 +5,7 @@ import { validateTitleRequest } from "../validation.js";
 
 export const titleRouter = Router();
 
-// A small, separate, non-streaming endpoint -- the frontend only ever
-// calls this in the background after a conversation's first exchange
-// completes, and treats any failure here as non-blocking (see App.tsx),
-// so a plain single JSON response (not ndjson like /api/chat) is simpler
-// and sufficient; there's nothing to show progressively for a few words.
+// Called in the background after the first exchange; failures are non-blocking.
 titleRouter.post("/title", async (req, res, next) => {
   try {
     const { model, userMessage, assistantMessage } = validateTitleRequest(req.body);
