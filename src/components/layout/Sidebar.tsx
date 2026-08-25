@@ -1,3 +1,4 @@
+// Renders conversation history, search, model filtering, and rename/delete/new-chat controls.
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { Check, MessagesSquare, PanelLeftClose, PanelLeftOpen, Pencil, Plus, Search, Trash2, X } from "lucide-react";

@@ -1,3 +1,4 @@
+// Scrollable message history, including the "Thinking..." waiting indicator.
 import { useEffect, useRef } from "react";
 import { motion } from "motion/react";
 import type { Message } from "../../types/chat";

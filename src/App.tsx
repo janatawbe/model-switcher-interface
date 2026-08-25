@@ -1,3 +1,5 @@
+// Root application component: owns conversation state, persistence, model
+// switching, and the request/streaming lifecycle for chat messages.
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence } from "motion/react";
 import type { Conversation, Message } from "./types/chat";

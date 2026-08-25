@@ -1,3 +1,4 @@
+// Initial landing screen: presents the model cards used to start a new conversation.
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { motion, useMotionValue, useReducedMotion, useSpring, useTransform } from "motion/react";
 import { MODELS, getModelIndex } from "../ui/models";

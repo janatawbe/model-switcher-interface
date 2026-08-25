@@ -1,3 +1,4 @@
+// Validates and normalizes incoming chat/title request bodies before they reach the AI service.
 import { ApiError, isModelId, normalizeModelId, type ChatMessage, type ChatRequest, type ModelId } from "./types/ai.js";
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {

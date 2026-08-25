@@ -1,3 +1,4 @@
+// Central registry for supported AI models and their provider configuration.
 import type { ModelId } from "../types/ai.js";
 
 export type ModelRegistryEntry = {

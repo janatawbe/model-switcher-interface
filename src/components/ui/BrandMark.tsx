@@ -1,3 +1,4 @@
+// Renders the application's own logo mark as an SVG built from the model palette.
 import { motion } from "motion/react";
 import { MODELS } from "./models";
 

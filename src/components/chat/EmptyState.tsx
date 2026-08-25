@@ -1,3 +1,4 @@
+// Placeholder shown for a new, message-free conversation with suggested prompts.
 import { motion } from "motion/react";
 import { Code2, Lightbulb, MessageCircle } from "lucide-react";
 import { getModel } from "../ui/models";

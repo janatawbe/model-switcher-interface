@@ -1,3 +1,4 @@
+// Confirmation dialog shown when switching models mid-conversation.
 import { ArrowRight } from "lucide-react";
 import { getModel } from "./models";
 import { ConfirmDialog } from "./ConfirmDialog";

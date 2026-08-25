@@ -1,3 +1,4 @@
+// Express app setup: middleware, route mounting, and centralized error handling.
 import "dotenv/config";
 import cors from "cors";
 import express, { type ErrorRequestHandler } from "express";

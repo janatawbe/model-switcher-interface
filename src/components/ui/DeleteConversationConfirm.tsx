@@ -1,3 +1,4 @@
+// Confirmation dialog shown before permanently deleting a conversation.
 import { Trash2 } from "lucide-react";
 import { ConfirmDialog } from "./ConfirmDialog";
 

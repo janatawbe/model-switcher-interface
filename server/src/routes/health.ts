@@ -1,3 +1,4 @@
+// Simple liveness endpoint for the backend.
 import { Router } from "express";
 
 export const healthRouter = Router();

@@ -1,3 +1,4 @@
+// Shared frontend types for chat messages and persisted conversations.
 export type Message = {
   id: string;
   role: "user" | "assistant";

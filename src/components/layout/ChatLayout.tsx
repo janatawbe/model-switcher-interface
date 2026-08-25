@@ -1,3 +1,5 @@
+// Top-level chat shell: switches between the welcome screen and the
+// sidebar/header/messages/composer layout based on whether a model is selected.
 import { useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import type { Conversation, Message } from "../../types/chat";

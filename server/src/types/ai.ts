@@ -1,3 +1,4 @@
+// Shared backend types: model identities, chat request shapes, and the ApiError class.
 // Our application's own model identities -- the same three IDs the frontend
 // already uses (see src/components/ui/models.ts on the client side). The
 // backend owns the mapping from these to real OpenRouter model IDs; the
