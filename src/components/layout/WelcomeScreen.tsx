@@ -142,10 +142,9 @@ export function WelcomeScreen({ previewModel, onSelectModel, onPreviewModel }: W
                     isEmphasized ? `${model.accent.border} bg-white/[0.07]` : "border-white/[0.09] group-hover:border-white/[0.16]"
                   }`}
                 />
-                {/* fixed icon slot: each glyph's own path geometry renders
-                    at a different optical size at the same nominal size
-                    prop (e.g. Gemma's mark is scaled up internally to
-                    match the others' visual weight), so every icon is
+                {/* fixed icon slot: a glyph's own path geometry could in
+                    principle render at a different optical size than the
+                    others at the same nominal size prop, so every icon is
                     centered in an identically-sized box rather than
                     dropped straight into the flex stack -- that keeps the
                     title/subtitle baselines identical across cards

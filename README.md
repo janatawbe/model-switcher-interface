@@ -4,7 +4,7 @@ An AI chat interface that lets you switch between multiple free models mid-proje
 
 ## Features
 
-- **Three free AI models** via OpenRouter, each with its own identity — accent color, icon, and animated aurora background: **Gemma** (Google), **Nemotron** (NVIDIA), **Laguna** (Poolside).
+- **Three free AI models** via OpenRouter, each with its own identity — accent color, icon, and animated aurora background: **MiniMax M3** (MiniMax), **Nemotron** (NVIDIA), **Laguna** (Poolside).
 - **Streaming responses** — replies appear token by token instead of all at once.
 - **Markdown rendering** with syntax-highlighted code blocks (copy-to-clipboard on both the whole reply and individual code blocks).
 - **Persistent conversation history** — conversations are saved to `localStorage`, with automatic context-aware titles, manual rename, delete, search, and filter-by-model.
@@ -24,7 +24,7 @@ An AI chat interface that lets you switch between multiple free models mid-proje
 React frontend  →  Express backend  →  OpenRouter  →  selected AI model
 ```
 
-The frontend never talks to OpenRouter directly and never sees the API key. It only ever calls this project's own backend (`/api/chat`, `/api/title`), which holds the OpenRouter API key server-side, resolves the app's model IDs (`gemma` / `nemotron` / `laguna`) to real OpenRouter model IDs, and streams the response back.
+The frontend never talks to OpenRouter directly and never sees the API key. It only ever calls this project's own backend (`/api/chat`, `/api/title`), which holds the OpenRouter API key server-side, resolves the app's model IDs (`minimax-m3` / `nemotron` / `laguna`) to real OpenRouter model IDs, and streams the response back.
 
 ## Project layout
 

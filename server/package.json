@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Express backend for AI Model Switcher. Resolves our app-level model IDs (gemma/nemotron/laguna) and proxies chat requests to OpenRouter.",
+  "description": "Express backend for AI Model Switcher. Resolves our app-level model IDs (minimax-m3/nemotron/laguna) and proxies chat requests to OpenRouter.",
   "main": "dist/index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",

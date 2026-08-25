@@ -11,11 +11,11 @@ export type ModelGlyphProps = {
 };
 
 // Poolside's mark ships as three overlapping soft-edged gradient shapes
-// (each fading via its own linearGradient) rather than a flat path, so --
-// same reasoning as Gemma below -- its gradient/mask/clipPath ids need to
-// be unique per render or two simultaneous instances (e.g. the welcome
-// card and the header selector open at once) would fight over the same
-// SVG ids and one would render blank.
+// (each fading via its own linearGradient) rather than a flat path, so its
+// gradient/mask/clipPath ids need to be unique per render or two
+// simultaneous instances (e.g. the welcome card and the header selector
+// open at once) would fight over the same SVG ids and one would render
+// blank.
 export function PoolsideGlyph({ size = 16, className }: ModelGlyphProps) {
   const uid = useId();
   const clipId = `poolside-clip-${uid}`;
@@ -67,40 +67,10 @@ export function PoolsideGlyph({ size = 16, className }: ModelGlyphProps) {
   );
 }
 
-// Google's own mark is authored as a mostly-solid disc with very fine
-// internal facet/reticle linework -- at the small sizes this app renders
-// icons at, a flat single-tone fill collapses that linework into what
-// reads as a plain blob rather than "Gemma." Google's own official
-// presentation of this exact mark uses a fixed blue gradient (not
-// currentColor) precisely because the tonal shift across the disc is what
-// makes the facets and reticle actually legible; matching that (gradient
-// values below are Google's own, from the same icon set's color variant)
-// fixes the legibility without changing the mark's geometry or this app's
-// surrounding accent/color system. Its path also carries more built-in
-// padding than the Poolside/NVIDIA marks (the reticle ring sits well inside
-// the 24x24 box rather than touching its edges), so at an identical
-// numeric size it reads visibly smaller -- scaled up here so all three
-// marks land at the same optical size at every call site, with no other
-// component needing to know about the difference.
-const GEMMA_SCALE = 1.35;
-
-export function GemmaGlyph({ size = 16, className }: ModelGlyphProps) {
-  const gradientId = `gemma-gradient-${useId()}`;
-  const rendered = size * GEMMA_SCALE;
+export function MiniMaxGlyph({ size = 16, className }: ModelGlyphProps) {
   return (
-    <svg viewBox="0 0 24 24" width={rendered} height={rendered} className={className} aria-hidden="true">
-      <defs>
-        <linearGradient id={gradientId} x1="24.419%" y1="75.581%" x2="75.194%" y2="25.194%">
-          <stop offset="0%" stopColor="#446EFF" />
-          <stop offset="36.661%" stopColor="#2E96FF" />
-          <stop offset="83.221%" stopColor="#B1C5FF" />
-        </linearGradient>
-      </defs>
-      <path
-        fill={`url(#${gradientId})`}
-        fillRule="evenodd"
-        d="M12.34 5.953a8.233 8.233 0 01-.247-1.125V3.72a8.25 8.25 0 015.562 2.232H12.34zm-.69 0c.113-.373.199-.755.257-1.145V3.72a8.25 8.25 0 00-5.562 2.232h5.304zm-5.433.187h5.373a7.98 7.98 0 01-.267.696 8.41 8.41 0 01-1.76 2.65L6.216 6.14zm-.264-.187H2.977v.187h2.915a8.436 8.436 0 00-2.357 5.767H0v.186h3.535a8.436 8.436 0 002.357 5.767H2.977v.186h2.976v2.977h.187v-2.915a8.436 8.436 0 005.767 2.357V24h.186v-3.535a8.436 8.436 0 005.767-2.357v2.915h.186v-2.977h2.977v-.186h-2.915a8.436 8.436 0 002.357-5.767H24v-.186h-3.535a8.436 8.436 0 00-2.357-5.767h2.915v-.187h-2.977V2.977h-.186v2.915a8.436 8.436 0 00-5.767-2.357V0h-.186v3.535A8.436 8.436 0 006.14 5.892V2.977h-.187v2.976zm6.14 14.326a8.25 8.25 0 005.562-2.233H12.34c-.108.367-.19.743-.247 1.126v1.107zm-.186-1.087a8.015 8.015 0 00-.258-1.146H6.345a8.25 8.25 0 005.562 2.233v-1.087zm-8.186-7.285h1.107a8.23 8.23 0 001.125-.247V6.345a8.25 8.25 0 00-2.232 5.562zm1.087.186H3.72a8.25 8.25 0 002.232 5.562v-5.304a8.012 8.012 0 00-1.145-.258zm15.47-.186a8.25 8.25 0 00-2.232-5.562v5.315c.367.108.743.19 1.126.247h1.107zm-1.086.186c-.39.058-.772.144-1.146.258v5.304a8.25 8.25 0 002.233-5.562h-1.087zm-1.332 5.69V12.41a7.97 7.97 0 00-.696.267 8.409 8.409 0 00-2.65 1.76l3.346 3.346zm0-6.18v-5.45l-.012-.013h-5.451c.076.235.162.468.26.696a8.698 8.698 0 001.819 2.688 8.698 8.698 0 002.688 1.82c.228.097.46.183.696.259zM6.14 17.848V12.41c.235.078.468.167.696.267a8.403 8.403 0 012.688 1.799 8.404 8.404 0 011.799 2.688c.1.228.19.46.267.696H6.152l-.012-.012zm0-6.245V6.326l3.29 3.29a8.716 8.716 0 01-2.594 1.728 8.14 8.14 0 01-.696.259zm6.257 6.257h5.277l-3.29-3.29a8.716 8.716 0 00-1.728 2.594 8.135 8.135 0 00-.259.696zm-2.347-7.81a9.435 9.435 0 01-2.88 1.96 9.14 9.14 0 012.88 1.94 9.14 9.14 0 011.94 2.88 9.435 9.435 0 011.96-2.88 9.14 9.14 0 012.88-1.94 9.435 9.435 0 01-2.88-1.96 9.434 9.434 0 01-1.96-2.88z"
-      />
+    <svg viewBox="0 0 24 24" width={size} height={size} fill="currentColor" fillRule="evenodd" className={className} aria-hidden="true">
+      <path d="M16.278 2c1.156 0 2.093.927 2.093 2.07v12.501a.74.74 0 00.744.709.74.74 0 00.743-.709V9.099a2.06 2.06 0 012.071-2.049A2.06 2.06 0 0124 9.1v6.561a.649.649 0 01-.652.645.649.649 0 01-.653-.645V9.1a.762.762 0 00-.766-.758.762.762 0 00-.766.758v7.472a2.037 2.037 0 01-2.048 2.026 2.037 2.037 0 01-2.048-2.026v-12.5a.785.785 0 00-.788-.753.785.785 0 00-.789.752l-.001 15.904A2.037 2.037 0 0113.441 22a2.037 2.037 0 01-2.048-2.026V18.04c0-.356.292-.645.652-.645.36 0 .652.289.652.645v1.934c0 .263.142.506.372.638.23.131.514.131.744 0a.734.734 0 00.372-.638V4.07c0-1.143.937-2.07 2.093-2.07zm-5.674 0c1.156 0 2.093.927 2.093 2.07v11.523a.648.648 0 01-.652.645.648.648 0 01-.652-.645V4.07a.785.785 0 00-.789-.78.785.785 0 00-.789.78v14.013a2.06 2.06 0 01-2.07 2.048 2.06 2.06 0 01-2.071-2.048V9.1a.762.762 0 00-.766-.758.762.762 0 00-.766.758v3.8a2.06 2.06 0 01-2.071 2.049A2.06 2.06 0 010 12.9v-1.378c0-.357.292-.646.652-.646.36 0 .653.29.653.646V12.9c0 .418.343.757.766.757s.766-.339.766-.757V9.099a2.06 2.06 0 012.07-2.048 2.06 2.06 0 012.071 2.048v8.984c0 .419.343.758.767.758.423 0 .766-.339.766-.758V4.07c0-1.143.937-2.07 2.093-2.07z" />
     </svg>
   );
 }

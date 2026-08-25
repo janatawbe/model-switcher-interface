@@ -112,7 +112,7 @@ void main() {
   float field = fbm(pField * 1.9 + warped * 1.25 + flow);
   float n = field * 0.5 + 0.5;
 
-  // Base territory centers read left-to-right as Gemma / Nemotron / Laguna,
+  // Base territory centers read left-to-right as MiniMax M3 / Nemotron / Laguna,
   // echoing the product's lavender-left, cyan-center, orange-right hero
   // composition, while each keeps its own independent orbital wobble.
   vec2 pos0 = vec2(-0.34, 0.16) + 0.15 * vec2(sin(t * 0.1), cos(t * 0.12));
