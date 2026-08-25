@@ -34,8 +34,11 @@ export function MessageList({ messages, isTyping, selectedModel, onRegenerateMes
           360px phone -- without this cap, bubbles would stretch toward
           their full 65% width against a multi-thousand-pixel-wide
           container on large desktop, which reads as sparse and hard to
-          scan rather than spacious. */}
-      <div className="mx-auto w-full max-w-3xl">
+          scan rather than spacious. The wider xl: cap only kicks in at
+          1280px+ (laptop and up) -- tablet/mobile never reach either cap
+          today since the available width there is already narrower, so
+          this is a no-op for them. */}
+      <div className="mx-auto w-full max-w-3xl xl:max-w-4xl">
         {messages.map((message, index) => (
           <MessageBubble
             key={message.id}
@@ -61,16 +64,14 @@ export function MessageList({ messages, isTyping, selectedModel, onRegenerateMes
                 {(model?.label ?? "Assistant").toUpperCase()}
               </span>
               <div
-                className={`flex items-center gap-1 rounded-2xl rounded-tl-sm border bg-white/[0.055] px-4 py-3 backdrop-blur-sm transition-colors duration-300 ${model?.accent.border ?? "border-white/10"}`}
+                className={`flex items-center rounded-2xl rounded-tl-sm border bg-white/[0.055] px-4 py-3 text-[15px] leading-relaxed text-neutral-100 backdrop-blur-sm transition-colors duration-300 ${model?.accent.border ?? "border-white/10"}`}
               >
-                {[0, 1, 2].map((i) => (
-                  <motion.span
-                    key={i}
-                    className="h-1.5 w-1.5 rounded-full bg-neutral-400"
-                    animate={{ y: [0, -3, 0] }}
-                    transition={{ duration: 0.9, repeat: Infinity, delay: i * 0.15, ease: "easeInOut" }}
-                  />
-                ))}
+                <motion.span
+                  animate={{ opacity: [0.55, 1, 0.55] }}
+                  transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
+                >
+                  Thinking...
+                </motion.span>
               </div>
             </div>
           </div>
