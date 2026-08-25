@@ -55,12 +55,6 @@ export type ErrorCode =
   | "INVALID_AI_RESPONSE"
   | "INTERNAL_ERROR";
 
-export type AppError = {
-  code: ErrorCode;
-  message: string;
-  status: number;
-};
-
 export class ApiError extends Error {
   code: ErrorCode;
   status: number;
