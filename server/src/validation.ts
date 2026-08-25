@@ -1,4 +1,4 @@
-// Validates and normalizes incoming chat/title request bodies before they reach the AI service.
+// Validates and normalizes incoming chat/title request bodies.
 import { ApiError, isModelId, normalizeModelId, type ChatMessage, type ChatRequest, type ModelId } from "./types/ai.js";
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -23,9 +23,7 @@ function validateMessage(value: unknown, index: number): ChatMessage {
   return { role, content };
 }
 
-// Never trust the request body -- validates shape and content field by
-// field and throws a normalized ApiError (never a raw stack trace) on the
-// first problem found.
+// Validates each field and throws a clean error on the first problem.
 export function validateChatRequest(body: unknown): ChatRequest {
   if (!isPlainObject(body)) {
     throw new ApiError("INVALID_REQUEST", "Request body must be a JSON object.", 400);

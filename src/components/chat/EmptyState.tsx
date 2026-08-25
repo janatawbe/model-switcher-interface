@@ -27,13 +27,9 @@ type EmptyStateProps = {
   onSuggestionSelect: (prompt: string) => void;
 };
 
-// Only ever rendered once a model is selected but no message has been sent
-// yet -- the welcome-before-any-model moment is its own full-screen
-// WelcomeScreen, mounted instead of the chat shell entirely.
+// Shown once a model is selected but no message has been sent yet.
 export function EmptyState({ selectedModel, previewModel, onSuggestionSelect }: EmptyStateProps) {
-  // The mark's color previews whatever's hovered (falling back to the
-  // actual selection); the copy below only changes on a real selection --
-  // a temporary hover must never claim a model has been chosen.
+  // Color previews the hovered model, falling back to the real selection.
   const accent = getModel(previewModel ?? selectedModel)?.accent;
 
   return (
@@ -48,8 +44,7 @@ export function EmptyState({ selectedModel, previewModel, onSuggestionSelect }: 
         <div
           className={`absolute inset-0 rounded-full blur-2xl transition-colors duration-500 ${accent?.softBg ?? "bg-white/5"}`}
         />
-        {/* depth separation: a soft dark vignette, not a card, that quiets the
-            aurora immediately behind the mark so it reads as a nearer plane */}
+        {/* Dark vignette that separates the mark from the aurora behind it */}
         <div className="absolute h-28 w-28 rounded-full bg-[radial-gradient(closest-side,rgba(4,5,9,0.45),transparent)]" />
         <svg viewBox="0 0 100 100" className="absolute h-24 w-24" aria-hidden="true">
           <motion.circle

@@ -10,12 +10,7 @@ type ModelSwitchConfirmProps = {
   onCancel: () => void;
 };
 
-// Shown only when the user tries to switch models mid-conversation --
-// silently reassigning an in-progress chat to a different model would make
-// it look like that model said things it never did. Cancelling leaves the
-// current model/conversation completely untouched; confirming switches
-// models and starts a fresh conversation. See ConfirmDialog for the shared
-// portal/backdrop/Escape-to-cancel treatment.
+// Confirming switches models and starts a fresh conversation.
 export function ModelSwitchConfirm({ fromModelId, toModelId, onConfirm, onCancel }: ModelSwitchConfirmProps) {
   const fromModel = getModel(fromModelId);
   const toModel = getModel(toModelId);

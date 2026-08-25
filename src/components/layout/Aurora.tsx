@@ -8,16 +8,12 @@ type AuroraProps = {
   previewModel: string | null;
 };
 
-// Governs how the model-color weights (and preview softness) ease toward
-// their target -- tuned so the transition visually settles in roughly
-// 600-1200ms rather than reading as an instant swap.
+// Controls how quickly colors ease toward their target (~600-1200ms).
 const MIX_TAU = 0.42;
 const ENERGY_TAU = 0.3;
 const MOUSE_TAU = 0.12;
 const MAX_DPR = 1.75;
-// The field is soft and heavily blurred by nature, so rendering at a lower
-// backing resolution and letting the GPU upscale it is visually
-// indistinguishable from full resolution but substantially cheaper per pixel.
+// Renders at a lower resolution and upscales; the soft blur hides it.
 const RENDER_SCALE = 0.65;
 
 function compileShader(gl: WebGL2RenderingContext, type: number, source: string) {
@@ -126,15 +122,7 @@ export function Aurora({ activeModel, previewModel }: AuroraProps) {
     };
     resize();
 
-    // Changing canvas.width/height (inside resize()) clears the drawing
-    // buffer per the canvas spec -- fine while the render loop is running,
-    // since the next frame repaints it, but the loop deliberately stops
-    // itself once the animation settles (see the `idle` convergence check
-    // below) to avoid redrawing an unchanging frame forever. Without also
-    // waking it here, a resize after that point clears the canvas and
-    // nothing ever redraws it. wakeRef is the same restart path prop
-    // changes already use, so this settles right back to idle after one
-    // fresh frame at the new size.
+    // Resizing clears the canvas, so wake the render loop to repaint it.
     const resizeObserver = new ResizeObserver(() => {
       resize();
       wakeRef.current();
@@ -169,21 +157,13 @@ export function Aurora({ activeModel, previewModel }: AuroraProps) {
       lastTimestamp = timestamp;
 
       const { activeModel: active, previewModel: preview } = stateRef.current;
-      // Whether a model is settled (lavender/cyan/orange only, no motion)
-      // or the interface is still in the multi-model exploration state is
-      // driven purely by whether a model has been chosen -- not by whether
-      // a conversation has started yet.
+      // True until a model is chosen, regardless of conversation state.
       const exploring = active === null;
 
       let energyTarget = exploring || preview ? 1 : 0;
       if (reducedMotion) energyTarget = Math.min(energyTarget, 0.12);
 
-      // Hovering a model previews it as a pure, monochromatic atmosphere --
-      // same one-hot target as an actively selected model -- so the user
-      // reads it as "this is that AI's personality," not a blend. Only the
-      // balanced idle state (nothing hovered, nothing selected yet) mixes
-      // all three, weighted by each palette's idleWeight to compensate for
-      // palettes that are inherently quieter at equal numeric share.
+      // Hover previews one model fully; idle blends all three by weight.
       const weightTargets: number[] = new Array(MODELS.length).fill(0);
       if (preview) {
         weightTargets[getModelIndex(preview)] = 1;
@@ -196,13 +176,7 @@ export function Aurora({ activeModel, previewModel }: AuroraProps) {
       }
 
       const mouseActiveTarget = exploring || preview ? 1 : 0;
-      // The balanced idle field IS three hover atmospheres composed
-      // together, so it shares the exact same softened intensity as a
-      // single hovered preview -- both are "no model committed yet." Only
-      // an actively selected model steps up to full vibrancy. Because
-      // softness no longer changes between idle and hover, moving into or
-      // out of a preview only shifts which model dominates, never the
-      // underlying color character.
+      // Idle and hover share the same softness; only selection is fully vibrant.
       const previewSoftnessTarget = exploring ? 1 : 0;
 
       const kMix = 1 - Math.exp(-dt / MIX_TAU);

@@ -2,9 +2,7 @@
 import type { ReactElement } from "react";
 import { MiniMaxGlyph, NvidiaGlyph, PoolsideGlyph, type ModelGlyphProps } from "./ModelGlyphs";
 
-// The real, recognizable per-model mark (not a generic icon-library glyph),
-// used everywhere a model's identity is shown -- welcome cards, selector,
-// chat header, message bubbles -- so a model always looks like itself.
+// Icon shown everywhere a model's identity appears.
 export type ModelIconComponent = (props: ModelGlyphProps) => ReactElement;
 
 export type ModelAccent = {
@@ -23,11 +21,7 @@ export type AuroraPalette = {
   primary: [number, number, number];
   secondary: [number, number, number];
   highlight: [number, number, number];
-  // Relative pull in the balanced idle (no hover, no selection) state.
-  // 1 = equal share. Some palettes are inherently quieter than others at
-  // equal weight (a muted copper reads smaller than a vivid violet/cyan
-  // at the same numeric share), so this compensates for perceived
-  // presence rather than literal pixel area. Defaults to 1.
+  // Relative pull in the idle blend; compensates for quieter palettes. Defaults to 1.
   idleWeight?: number;
 };
 
@@ -48,9 +42,7 @@ export const MODELS: ModelOption[] = [
     provider: "MiniMax",
     tagline: "Multilingual · Efficient · Fast",
     icon: MiniMaxGlyph,
-    // Identical accent/aurora values to the model this replaced (formerly
-    // Inkling, formerly Gemma before that) -- deliberately unchanged, not a
-    // new color pick.
+    // Inherited unchanged from the model this replaced.
     accent: {
       text: "text-blue-300",
       dot: "bg-blue-400",
@@ -85,9 +77,6 @@ export const MODELS: ModelOption[] = [
       glow: "shadow-[0_0_40px_-10px_rgba(132,204,22,0.5)]",
     },
     aurora: {
-      // NVIDIA's signature yellow-green -- already reads at comparable
-      // luminance to the violet/blue at equal weight, so no idleWeight
-      // compensation needed here.
       primary: [0.55, 0.85, 0.15],
       secondary: [0.32, 0.62, 0.05],
       highlight: [0.85, 1.0, 0.55],
@@ -99,8 +88,7 @@ export const MODELS: ModelOption[] = [
     provider: "Poolside",
     tagline: "Code-Fluent · Fast · Adaptive",
     icon: PoolsideGlyph,
-    // Identical accent/aurora values to the model this replaced (formerly
-    // GPT/OpenAI) -- deliberately unchanged, not a new color pick.
+    // Inherited unchanged from the model this replaced.
     accent: {
       text: "text-violet-300",
       dot: "bg-violet-400",
@@ -119,13 +107,7 @@ export const MODELS: ModelOption[] = [
   },
 ];
 
-// This app id slot has had two earlier occupants -- "gemma" (replaced by
-// Inkling), then "inkling" (replaced by MiniMax M3) -- and conversations
-// already saved in a user's localStorage may still carry either old id.
-// Nothing here ever rewrites that persisted data; resolving both aliases
-// to "minimax-m3" at lookup time means old conversations from either era
-// keep rendering with the correct icon/label/color and keep working, with
-// zero migration.
+// Maps old model ids (gemma, inkling) to their replacement for old conversations.
 const LEGACY_MODEL_ID_ALIASES: Record<string, string> = { gemma: "minimax-m3", inkling: "minimax-m3" };
 
 function resolveModelId(modelId: string | null | undefined): string | null | undefined {

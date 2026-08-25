@@ -8,9 +8,6 @@ type DeleteConversationConfirmProps = {
   onCancel: () => void;
 };
 
-// Deleting a conversation is destructive and permanent (no undo), so it
-// gets the same explicit-confirmation treatment as the model-switch dialog
-// (see ConfirmDialog) rather than a native confirm().
 export function DeleteConversationConfirm({ conversationTitle, onConfirm, onCancel }: DeleteConversationConfirmProps) {
   return (
     <ConfirmDialog

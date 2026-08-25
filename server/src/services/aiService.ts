@@ -1,17 +1,10 @@
-// Handles all OpenRouter communication: streaming chat completions, retries,
-// timeouts, provider error classification, and automatic title generation.
+// Handles OpenRouter requests, streaming, retries, and error handling.
 import { resolveModel } from "../config/models.js";
 import { ApiError, type AIServiceRequest, type ErrorCode, type ModelId } from "../types/ai.js";
 
 const OPENROUTER_CHAT_URL = "https://openrouter.ai/api/v1/chat/completions";
 
-// OpenRouter is the ONLY AI gateway this backend talks to -- no separate
-// Poolside/Google/NVIDIA provider clients. Everything OpenRouter-specific
-// (the endpoint, headers, request/response shape, and its Server-Sent
-// Events chunk format) is isolated to this one module so a future gateway
-// swap only touches this file. Responses are always requested with
-// stream: true and re-emitted to the route layer as plain delta strings --
-// callers never see OpenRouter's own SSE/"choices[0].delta" shape.
+// Shape of one streamed chunk from OpenRouter's chat completions API.
 type OpenRouterStreamChunk = {
   choices?: Array<{
     delta?: {
@@ -20,41 +13,21 @@ type OpenRouterStreamChunk = {
   }>;
 };
 
-// Free OpenRouter models sit behind a shared upstream capacity pool per
-// provider (e.g. all apps hitting Google AI Studio's free tier at once) --
-// a 429 there is a transient "try again in a moment" condition, not a
-// broken model or a bad request, and applies identically to whichever
-// model happens to be popular at that instant. One short, bounded retry
-// covers that case for every model through this single service, so no
-// model needs special-casing.
+// Retries rate-limited requests a few times before giving up.
 const MAX_ATTEMPTS = 3;
 const RETRY_DELAY_MS = 1000;
 
-// Bounds how long the UI can ever be stuck "thinking" -- without this, a
-// stalled connection (TCP handshake completes but OpenRouter never
-// responds) would hang this fetch, and therefore the frontend's loading
-// state, indefinitely. 45s comfortably clears real observed response
-// times for the slower reasoning-heavy free models while still giving up
-// well before a user would reasonably wonder if the app is broken. Not
-// retried -- a stall is a "something's actually wrong" signal, not the
-// same "try again in a moment" case a 429 is.
+// Prevents a request from hanging indefinitely if OpenRouter never responds.
 const REQUEST_TIMEOUT_MS = 45000;
 
-// Once streaming has actually started, a fixed total-duration timeout
-// would unfairly kill a long-but-genuinely-still-arriving response. This
-// instead resets on every chunk, so it only fires if the stream goes
-// silent for this long -- a real stall, not just a long answer.
+// Resets on each chunk, so only a silent stream is treated as a stall.
 const STREAM_IDLE_TIMEOUT_MS = 30000;
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-// Turns OpenRouter's raw HTTP status into one of our own error categories,
-// with a message that's honest about what actually happened without
-// leaking any provider/technical detail. Driven purely by the status
-// code OpenRouter returned, so it applies identically no matter which
-// model was requested.
+// Turns an OpenRouter HTTP status into a user-facing error category.
 function classifyFailure(status: number): { code: ErrorCode; message: string } {
   if (status === 429) {
     return {
@@ -69,11 +42,7 @@ function classifyFailure(status: number): { code: ErrorCode; message: string } {
     };
   }
   if (status === 404) {
-    // OpenRouter returns this when the requested model has no active
-    // provider endpoint to route to right now -- distinct from a rate
-    // limit (the request wasn't throttled, there's just nowhere to send
-    // it) and not worth retrying, since a missing route doesn't resolve
-    // itself in the few seconds a retry would wait.
+    // No active provider for this model right now; not worth retrying.
     return {
       code: "AI_MODEL_UNAVAILABLE",
       message: "The selected model has no available provider right now.",
@@ -127,13 +96,7 @@ async function callOpenRouter(
           "HTTP-Referer": "https://github.com/janatawbe/model-switcher-interface",
           "X-Title": "AI Model Switcher",
         },
-        // max_tokens/reasoning are omitted entirely for a normal chat reply
-        // (undefined fields are dropped by JSON.stringify) -- only title
-        // generation passes them, to keep that lightweight background
-        // request cheap, short, and free of chain-of-thought preamble
-        // (some models, e.g. Nemotron, otherwise spend the whole token
-        // budget "thinking out loud" about how to write the title instead
-        // of just answering with it).
+        // max_tokens/reasoning only apply to title generation, kept short and cheap.
         body: JSON.stringify({
           model: openRouterModel,
           messages,
@@ -160,17 +123,12 @@ async function callOpenRouter(
 
     lastStatus = response.status;
     lastBody = await response.text().catch(() => "<unreadable response body>");
-    // Log the real upstream status/body server-side on every attempt --
-    // this is what actually gets hidden behind the generic client-facing
-    // message, and is the detail needed to diagnose model-specific issues.
+    // Log the real upstream error server-side; the client gets a generic message.
     console.error(
       `[aiService] OpenRouter request failed for "${openRouterModel}" (attempt ${attempt}/${MAX_ATTEMPTS}): ${lastStatus} ${response.statusText}\n${lastBody}`,
     );
 
-    // Only a rate limit is worth retrying automatically -- it's the one
-    // case OpenRouter itself frames as "temporary, try again shortly".
-    // Auth/config problems and hard provider outages won't resolve by
-    // immediately hammering the same request again.
+    // Only rate limits are worth retrying automatically.
     const canRetry = response.status === 429 && attempt < MAX_ATTEMPTS;
     if (!canRetry) break;
     await sleep(RETRY_DELAY_MS * attempt);
@@ -181,15 +139,7 @@ async function callOpenRouter(
   throw new ApiError(code, message, 502, resetAt);
 }
 
-// OpenRouter's free-tier daily quota (limit_source: "openrouter_free_tier_daily")
-// echoes its own rate-limit headers back inside the error body, including a
-// millisecond epoch reset time -- documented and referenced by name in the
-// same error's own remedy_hint ("see X-RateLimit-Reset"), so it's a signal
-// OpenRouter itself vouches for, not something we're inferring. Other 429
-// causes (e.g. a specific provider's shared-pool throttling) don't carry
-// this field, and in that case this deliberately returns undefined rather
-// than guessing -- no Retry-After header exists on any OpenRouter response,
-// confirmed by inspecting the raw response headers directly.
+// Reads the rate-limit reset time OpenRouter reports, if any.
 function extractRateLimitResetAt(body: string): string | undefined {
   let parsed: unknown;
   try {
@@ -209,15 +159,10 @@ function extractRateLimitResetAt(body: string): string | undefined {
   return new Date(resetMs).toISOString();
 }
 
-// The backend's tsconfig has no "DOM" lib (it's Node-only), so the global
-// ReadableStreamReadResult type from lib.dom.d.ts isn't available even
-// though ReadableStreamDefaultReader itself is (declared separately by
-// @types/node for the global fetch API) -- this just names the shape
-// reader.read() actually resolves to.
+// Shape of a stream reader's read() result (no DOM lib on the backend).
 type StreamReadResult = { done: boolean; value?: Uint8Array };
 
-// Races a single reader.read() call against an idle timer -- if neither
-// settles first, this is a stall (connection open, but nothing arriving).
+// Reads one chunk, or throws if the stream stays silent too long.
 async function readChunkWithTimeout(
   reader: ReadableStreamDefaultReader<Uint8Array>,
   timeoutMs: number,
@@ -233,15 +178,7 @@ async function readChunkWithTimeout(
   }
 }
 
-// The application-level entry point: route handlers call this and never
-// touch OpenRouter directly. Calls onDelta once per content fragment as it
-// arrives (true incremental streaming, not a buffer-then-flush); resolves
-// once OpenRouter signals the stream is complete. Throws the same ApiError
-// categories as before for anything that goes wrong establishing the
-// connection (classifyFailure/retry logic is unchanged, see
-// callOpenRouter) -- the only new failure mode is a mid-stream stall,
-// which reuses the existing generic AI_REQUEST_FAILED category rather
-// than inventing a new one the frontend doesn't already know how to show.
+// Streams a chat completion, calling onDelta as each chunk arrives.
 export async function streamMessage(
   request: AIServiceRequest,
   onDelta: (delta: string) => void,
@@ -283,9 +220,7 @@ export async function streamMessage(
     if (result.done) break;
     buffer += decoder.decode(result.value, { stream: true });
 
-    // OpenRouter (like the OpenAI-compatible SSE format it mirrors) sends
-    // one JSON payload per "data: ..." line; the final line is a literal
-    // "data: [DONE]" sentinel rather than a JSON payload.
+    // Each SSE line holds one JSON payload; the last line is a "[DONE]" sentinel.
     const lines = buffer.split("\n");
     buffer = lines.pop() ?? "";
     for (const line of lines) {
@@ -298,7 +233,7 @@ export async function streamMessage(
       try {
         parsed = JSON.parse(payload) as OpenRouterStreamChunk;
       } catch {
-        continue; // a stray non-JSON SSE line (e.g. a keep-alive comment) -- not fatal, just skip it
+        continue; // skip malformed lines
       }
 
       const delta = parsed.choices?.[0]?.delta?.content;
@@ -315,30 +250,16 @@ export async function streamMessage(
   }
 }
 
-// Generous enough for a real question/reply to establish the topic, small
-// enough to keep this lightweight -- a title doesn't need the model's
-// entire (possibly long) answer, just enough of it to know what it's about.
+// Enough context to capture the topic without sending the full reply.
 const TITLE_CONTEXT_CHAR_LIMIT = 600;
-// 3-7 words is comfortably under this even with a stray word or two of
-// preamble the model ignores the instruction and adds anyway; kept a bit
-// above the bare minimum since disableReasoning isn't guaranteed to be
-// honored by every provider, and a truncated title is worse than a few
-// extra tokens spent.
+// Small budget for a short title, with room for stray extra words.
 const TITLE_MAX_TOKENS = 30;
 
 function truncateForTitleContext(text: string): string {
   return text.length > TITLE_CONTEXT_CHAR_LIMIT ? `${text.slice(0, TITLE_CONTEXT_CHAR_LIMIT)}…` : text;
 }
 
-// A small, separate, non-streaming-to-the-caller use of the same
-// streamMessage/callOpenRouter plumbing real chat replies use -- reuses
-// its retry/timeout/error-classification behavior as-is rather than
-// duplicating any of it, just with a tight max_tokens cap and a
-// single-purpose prompt. Uses the conversation's own model (never a
-// different, separately-configured "title model"), consistent with "no
-// separate provider integration." Callers are expected to treat any
-// thrown ApiError as non-fatal to the conversation itself -- this only
-// ever generates a title, never anything the user's chat depends on.
+// Generates a short conversation title using the same model and pipeline.
 export async function generateConversationTitle(
   model: ModelId,
   userText: string,

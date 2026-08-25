@@ -10,8 +10,7 @@ type MessageBubbleProps = {
   message: Message;
   grouped: boolean;
   isLatest: boolean;
-  // Only meaningful (and only rendered) for an error bubble -- retrying a
-  // normal assistant reply is a different action (Regenerate, below).
+  // Shown only on error bubbles.
   onRetry?: () => void;
   // Only meaningful for the latest successful assistant reply.
   onRegenerate?: () => void;
@@ -34,12 +33,7 @@ export function MessageBubble({ message, grouped, isLatest, onRetry, onRegenerat
     }
   };
 
-  // Copy is available on any real (non-error) assistant reply, at any
-  // position in the conversation -- copying an older answer is a normal
-  // thing to want. Regenerate only makes sense for the single most recent
-  // reply (see MessageList): regenerating an older one would silently
-  // orphan everything the user said/received after it, which nothing in
-  // this app currently handles.
+  // Regenerate only applies to the latest reply; Copy applies to any.
   const showCopy = !isUser && !message.isError;
   const showRegenerate = showCopy && isLatest && !message.isStreaming && Boolean(onRegenerate);
 
@@ -64,11 +58,7 @@ export function MessageBubble({ message, grouped, isLatest, onRetry, onRegenerat
         )}
       </div>
 
-      {/* 65% only reads as a comfortable conversational width once there's
-          enough space for it to still be a generous line length -- on a
-          360px phone that's ~230px, uncomfortably narrow. Scaling the cap
-          up as the viewport shrinks keeps the wrapped line length roughly
-          similar across sizes instead of an ever-narrower column. */}
+      {/* Max width scales down on small screens to keep line length readable. */}
       <div className={`flex max-w-[88%] min-w-0 flex-col gap-1.5 sm:max-w-[80%] lg:max-w-[65%] ${isUser ? "items-end" : "items-start"}`}>
         {!isUser && !grouped && (
           <span className={`flex items-center gap-1.5 px-1 text-[11px] font-medium tracking-wider transition-colors duration-300 ${model?.accent.text ?? "text-neutral-400"}`}>

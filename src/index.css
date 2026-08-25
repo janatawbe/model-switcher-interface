@@ -2,20 +2,14 @@
 @import "tailwindcss";
 @import "highlight.js/styles/atom-one-dark.css";
 
-/* Token colors only -- highlight.js's own box styling (background,
-   padding) is overridden here since CodeBlock (MarkdownContent.tsx)
-   already provides the glass-styled wrapper, language label, and copy
-   button around every <pre>. */
+/* Token colors only; CodeBlock already provides the wrapper/padding. */
 .hljs {
   background: transparent;
   padding: 0;
   color: inherit;
 }
 
-/* Assistant-message markdown rendering (MarkdownContent.tsx). Deliberately
-   restrained relative to a typical marketing-site markdown stylesheet --
-   chat bubbles are narrow and dense, so headings/spacing stay close to the
-   surrounding 15px prose rather than a full document scale. */
+/* Assistant-message markdown styling, kept compact for narrow chat bubbles. */
 .markdown-content > :first-child {
   margin-top: 0;
 }
@@ -101,11 +95,7 @@ html,
 body,
 #root {
   height: 100%;
-  /* Every screen in this app is already built to fit its own viewport
-     (Aurora clips itself, message/code content scrolls internally,
-     bubbles/tables wrap or scroll rather than stretch) -- this is a
-     backstop against the one-off case, not a fix in place of those, so
-     nothing here should ever actually need to scroll horizontally. */
+  /* Backstop against horizontal scrolling; layouts shouldn't need it. */
   overflow-x: hidden;
 }
 

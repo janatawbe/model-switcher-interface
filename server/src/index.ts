@@ -1,4 +1,4 @@
-// Express app setup: middleware, route mounting, and centralized error handling.
+// Sets up the Express app: middleware, routes, and error handling.
 import "dotenv/config";
 import cors from "cors";
 import express, { type ErrorRequestHandler } from "express";
@@ -17,11 +17,7 @@ app.use("/api", healthRouter);
 app.use("/api", chatRouter);
 app.use("/api", titleRouter);
 
-// Centralized error handling: every route forwards failures here via
-// next(err) instead of formatting its own error response. Known failures
-// (ApiError) become clean, normalized JSON; anything unexpected is logged
-// server-side and returned as a generic 500 -- callers never see a raw
-// stack trace or internal details.
+// Turns known errors into clean JSON; hides raw errors from clients.
 const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
   if (err instanceof ApiError) {
     res.status(err.status).json({

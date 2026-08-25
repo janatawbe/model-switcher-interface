@@ -26,10 +26,7 @@ type ChatLayoutProps = {
   onDeleteConversation: (conversationId: string) => void;
 };
 
-// No model chosen yet is a completely different experience from an active
-// chat -- a full-screen product welcome moment, not a chat shell with an
-// empty message pane -- so it's a top-level branch here rather than
-// something handled inside the sidebar/header/content layout below.
+// Shows the full-screen welcome screen until a model is chosen.
 export function ChatLayout({
   messages,
   isTyping,
@@ -46,16 +43,7 @@ export function ChatLayout({
 }: ChatLayoutProps) {
   const hasMessages = messages.length > 0;
   const [previewModel, setPreviewModel] = useState<string | null>(null);
-  // Purely a UI preference for this session -- not persisted, matching
-  // how previewModel already works here. Defaults open on tablet and up
-  // (the existing, already-familiar layout), but starts collapsed on a
-  // phone-sized viewport, where an expanded 256px panel would be a large
-  // fraction of the screen the moment the chat shell first mounts -- this
-  // is the one place actual viewport width, not just CSS, decides
-  // something (a boolean default has to be one value or the other before
-  // any CSS can apply). The matchMedia check only ever runs once, on
-  // mount; every other size/position/backdrop decision is pure Tailwind
-  // breakpoints on top of this single boolean.
+  // Sidebar starts open on tablet+ and collapsed on phone-sized screens.
   const [sidebarOpen, setSidebarOpen] = useState(
     () => typeof window === "undefined" || window.matchMedia("(min-width: 768px)").matches,
   );

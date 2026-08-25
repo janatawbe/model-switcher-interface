@@ -37,22 +37,13 @@ export function Sidebar({
   const [searchQuery, setSearchQuery] = useState("");
   const [modelFilter, setModelFilter] = useState<string>("all");
 
-  // Most recently active conversation first -- conversations only ever
-  // gain a later updatedAt by getting new messages, so this doubles as
-  // "most recently used" ordering. Applied before filtering so search/model
-  // filtering only ever narrows this same order, never reshuffles it.
+  // Most recently updated conversation first.
   const sortedConversations = [...conversations].sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1));
 
   const normalizedQuery = searchQuery.trim().toLowerCase();
-  // Search and model filter are pure display filters over the existing
-  // `conversations` prop -- nothing here ever calls setConversations or
-  // touches storage, so clearing either one just re-includes everything
-  // again on the next render.
+  // Search and model filter are pure display filters; nothing is persisted.
   const visibleConversations = sortedConversations.filter((conversation) => {
-    // Resolved through getModel (not a raw string compare) so a
-    // conversation saved under a since-replaced model id -- e.g. "gemma"
-    // or "inkling", from before this slot became MiniMax M3 -- still
-    // matches its current filter.
+    // Resolves old model ids (e.g. gemma, inkling) so old conversations still match.
     if (modelFilter !== "all" && getModel(conversation.model)?.id !== modelFilter) return false;
     if (!normalizedQuery) return true;
     const titleMatches = conversation.title.toLowerCase().includes(normalizedQuery);
@@ -75,10 +66,7 @@ export function Sidebar({
     setDraftTitle(conversation.title);
   };
 
-  // Invalid (empty/whitespace-only) titles are silently rejected by
-  // onRenameConversation itself, so committing with one just leaves the
-  // stored title untouched -- same net effect as cancelling, without
-  // needing separate error UI for what's a rare, low-stakes mistake.
+  // Empty titles are rejected by onRenameConversation, so this is a no-op then.
   const commitRename = () => {
     if (editingId) onRenameConversation(editingId, draftTitle);
     setEditingId(null);
@@ -92,10 +80,7 @@ export function Sidebar({
 
   const pendingDeleteConversation = conversations.find((c) => c.id === pendingDeleteId) ?? null;
 
-  // Collapsed to a slim rail rather than unmounted -- New Chat and the
-  // toggle itself stay reachable with one click even with history hidden,
-  // and nothing about conversation state changes just because the panel
-  // showing it is closed.
+  // Collapses to a slim rail; New Chat and the toggle stay reachable.
   if (!isOpen) {
     return (
       <aside className="flex h-full w-14 shrink-0 flex-col items-center gap-3 border-r border-white/[0.06] bg-white/[0.03] py-5 backdrop-blur-xl">
@@ -126,12 +111,7 @@ export function Sidebar({
 
   return (
     <>
-      {/* Below md, the expanded panel becomes a floating overlay above the
-          chat rather than pushing it into an unusably narrow column -- the
-          backdrop dismisses it the same way the existing confirm dialogs
-          already close on an outside click. At md and up this is inert
-          (hidden), and the aside itself reverts to the original inline,
-          content-pushing layout via the md: overrides below. */}
+      {/* Below md, the panel becomes a floating overlay with a dismiss backdrop. */}
       <div
         className="fixed inset-0 z-30 bg-black/60 transition-opacity md:hidden"
         onClick={onToggleOpen}
@@ -258,9 +238,7 @@ export function Sidebar({
                     />
                     <button
                       type="button"
-                      // onMouseDown (not onClick) fires before the input's
-                      // onBlur, so this button's own click isn't lost to a
-                      // blur-triggered unmount racing the click event.
+                      // Fires before onBlur, so the click isn't lost.
                       onMouseDown={(event) => {
                         event.preventDefault();
                         commitRename();
@@ -300,10 +278,7 @@ export function Sidebar({
                     <span className="text-[11px] text-neutral-500">{getModelLabel(conversation.model)}</span>
                   </button>
 
-                  {/* Always visible on touch devices (no hover to reveal
-                      them on) -- only gated behind hover/focus at md and up,
-                      where a mouse is the primary input and constant visual
-                      noise on every row is worth avoiding. */}
+                  {/* Always visible on touch; hover-gated on md+ pointer devices. */}
                   <div
                     className={`absolute right-1.5 top-1.5 flex items-center gap-0.5 transition-opacity ${
                       isActive

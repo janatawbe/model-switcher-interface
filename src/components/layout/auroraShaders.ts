@@ -9,15 +9,7 @@ void main() {
 }
 `;
 
-// A directional, domain-warped fractal field whose color is blended
-// continuously across the whole frame from up to three model territories
-// (weighted by proximity to each model's focal point AND u_weights, the
-// global model preference), not isolated colored blobs. The cursor bends
-// the sampled coordinate space instead of adding a separate light, so the
-// existing colored energy visibly warps toward the pointer rather than a
-// spotlight appearing under it. u_energy scales how strongly the
-// field/cursor respond; u_time only ever advances while energy > 0, so the
-// field genuinely stops moving once settled.
+// Blends a warped noise field across up to three model color territories.
 export const AURORA_FRAGMENT_SHADER = `#version 300 es
 precision highp float;
 
@@ -31,9 +23,7 @@ uniform float u_energy;
 uniform vec3 u_weights;
 uniform vec2 u_mouse;
 uniform float u_mouseActive;
-// 0 = full vibrancy (idle balanced field, settled active model); 1 = fully
-// softened. Only rises while previewing a hovered model -- an active
-// selection stays at full intensity, matching the "idle vs active" look.
+// 0 = full vibrancy, 1 = fully softened; rises only while previewing.
 uniform float u_previewSoftness;
 
 uniform vec3 u_colorPrimary0;
@@ -100,9 +90,7 @@ void main() {
   float t = u_time;
   vec2 flow = vec2(0.05, -0.03) * t;
 
-  // The cursor bends the sampled coordinate space rather than adding a
-  // separate light source -- the existing colored field visibly warps
-  // toward the pointer instead of a spotlight appearing under it.
+  // Bends the sampled space toward the cursor instead of adding a light.
   vec2 toMouse = p - u_mouse;
   float mouseDist = length(toMouse);
   float mouseInfluence = (1.0 - smoothstep(0.0, 0.5, mouseDist)) * u_mouseActive;
@@ -113,9 +101,7 @@ void main() {
   float field = fbm(pField * 1.9 + warped * 1.25 + flow);
   float n = field * 0.5 + 0.5;
 
-  // Base territory centers read left-to-right as MiniMax M3 / Nemotron / Laguna,
-  // echoing the product's lavender-left, cyan-center, orange-right hero
-  // composition, while each keeps its own independent orbital wobble.
+  // Territory centers, each with its own slow orbital wobble.
   vec2 pos0 = vec2(-0.34, 0.16) + 0.15 * vec2(sin(t * 0.1), cos(t * 0.12));
   vec2 pos1 = vec2(0.0, 0.08) + 0.15 * vec2(cos(t * 0.085), sin(t * 0.105));
   vec2 pos2 = vec2(0.34, -0.08) + 0.15 * vec2(sin(t * 0.095 + 2.0), cos(t * 0.09 + 1.3));
@@ -124,15 +110,7 @@ void main() {
   float d1 = length(pField - pos1);
   float d2 = length(pField - pos2);
 
-  // A model's own field should read exactly as strong as its individual
-  // hover state, not diluted just because it coexists with the other two.
-  // Brightness responds to whether a model has ANY presence (saturating
-  // well under idle's per-model weight share) rather than scaling
-  // linearly with the raw weight -- hover is unchanged either way, since
-  // weight 1 or 0 always map to presence 1 or 0. Combining the three
-  // fields by their maximum (not their sum) keeps each one capped at its
-  // own hover-equivalent peak: overlap zones blend between two strong
-  // colors rather than stacking into an overall brighter/busier field.
+  // Combines fields by max (not sum) so overlaps blend, not stack brighter.
   float presence0 = smoothstep(0.0, 0.18, u_weights.x);
   float presence1 = smoothstep(0.0, 0.18, u_weights.y);
   float presence2 = smoothstep(0.0, 0.18, u_weights.z);
@@ -143,16 +121,10 @@ void main() {
 
   float focus = max(focus0, max(focus1, focus2));
 
-  // thin flow-contour lines: a computational, mesh-like texture rather
-  // than pure organic fog. Kept subtle relative to the main field.
+  // Subtle mesh-like contour lines over the main field.
   float contour = 1.0 - smoothstep(0.0, 0.03, abs(fract(field * 4.5) - 0.5) - 0.44);
 
-  // Each model occupies its own territory (inverse-distance from its own
-  // focal point) and territories blend naturally where they meet, rather
-  // than pre-averaging into one flat color everywhere. u_weights (the
-  // global model preference -- hover/settled/exploring) scales how far
-  // each model's influence reaches: at zero weight a model contributes
-  // nothing anywhere, so a settled/hovered state becomes fully pure.
+  // Each model's territory blends naturally with its neighbors by distance.
   float prox0 = 1.0 / (0.16 + d0 * d0 * 2.2);
   float prox1 = 1.0 / (0.16 + d1 * d1 * 2.2);
   float prox2 = 1.0 / (0.16 + d2 * d2 * 2.2);
@@ -171,9 +143,7 @@ void main() {
   vec3 highlight = u_colorHighlight0 * w0 + u_colorHighlight1 * w1 + u_colorHighlight2 * w2;
   vec3 flowColor = mix(colorHigh, colorLow, n);
 
-  // Soften a hovered preview toward atmospheric light rather than bright
-  // paint: reduce saturation (blend toward its own luminance) and slightly
-  // reduce overall intensity, without touching hue/identity.
+  // Softens a hovered preview by reducing saturation, not hue.
   float luma = dot(flowColor, vec3(0.299, 0.587, 0.114));
   flowColor = mix(flowColor, vec3(luma), u_previewSoftness * 0.4);
 

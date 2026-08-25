@@ -21,11 +21,7 @@ const item = {
   visible: { opacity: 1, y: 0, transition: { duration: 0.55, ease: [0.16, 1, 0.3, 1] as const } },
 };
 
-// The dedicated no-model landing experience: the whole app canvas, no
-// sidebar/header/input, since there's no conversation yet to frame. Mounts
-// its own Aurora (activeModel is always null here -- the balanced,
-// three-color idle field) and hands off to the existing chat shell the
-// moment a model is chosen.
+// Full-screen landing view shown before any model is chosen.
 export function WelcomeScreen({ previewModel, onSelectModel, onPreviewModel }: WelcomeScreenProps) {
   const reducedMotion = useReducedMotion();
   const mvX = useMotionValue(0);
@@ -76,9 +72,7 @@ export function WelcomeScreen({ previewModel, onSelectModel, onPreviewModel }: W
           <BrandMark size={72} variant="spectrum" emphasis={emphasisIndex} className="relative hidden text-white sm:block" />
         </motion.div>
 
-        {/* a soft, wide, blurred dark plate behind the text stack only --
-            guarantees contrast no matter how bright the aurora gets at any
-            given point, without reading as a hard card */}
+        {/* Dark blurred plate behind the text for contrast against the aurora. */}
         <div className="pointer-events-none absolute left-1/2 top-1/2 -z-10 h-[420px] w-[min(90vw,760px)] -translate-x-1/2 -translate-y-1/2 rounded-[50%] bg-[#030407]/45 blur-3xl" />
 
         {/* product identity: the biggest, most prominent text on the screen */}
@@ -108,8 +102,7 @@ export function WelcomeScreen({ previewModel, onSelectModel, onPreviewModel }: W
           Choose a model to get started
         </motion.p>
 
-        {/* three portals into the models: colored edge + glow that merges
-            into the surrounding aurora, not ordinary cards on a background */}
+        {/* Model cards glow with the aurora rather than sitting on a plain background. */}
         <motion.div variants={item} className="mt-2 flex flex-wrap items-stretch justify-center gap-3 sm:gap-4">
           {MODELS.map((model, index) => {
             const Icon = model.icon;
@@ -130,8 +123,7 @@ export function WelcomeScreen({ previewModel, onSelectModel, onPreviewModel }: W
                 transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
                 className="group relative flex w-[164px] flex-col items-center gap-2.5 rounded-2xl px-5 py-6 sm:w-[180px]"
               >
-                {/* this model's energy pushing out from the environment, not
-                    a card background changing color */}
+                {/* Glow radiates outward instead of changing the card background. */}
                 <span
                   aria-hidden="true"
                   className={`absolute -inset-6 -z-10 rounded-[36px] blur-3xl transition-opacity duration-300 ${model.accent.softBg} ${
@@ -143,13 +135,7 @@ export function WelcomeScreen({ previewModel, onSelectModel, onPreviewModel }: W
                     isEmphasized ? `${model.accent.border} bg-white/[0.07]` : "border-white/[0.09] group-hover:border-white/[0.16]"
                   }`}
                 />
-                {/* fixed icon slot: a glyph's own path geometry could in
-                    principle render at a different optical size than the
-                    others at the same nominal size prop, so every icon is
-                    centered in an identically-sized box rather than
-                    dropped straight into the flex stack -- that keeps the
-                    title/subtitle baselines identical across cards
-                    regardless of any individual glyph's rendered size. */}
+                {/* Fixed icon slot keeps title/subtitle baselines aligned across cards. */}
                 <motion.span
                   animate={{ scale: isEmphasized ? 1.12 : 1 }}
                   transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
@@ -159,9 +145,7 @@ export function WelcomeScreen({ previewModel, onSelectModel, onPreviewModel }: W
                   <Icon size={30} />
                 </motion.span>
                 <span className="text-base font-semibold text-neutral-50">{model.label}</span>
-                {/* reserved for two lines regardless of actual tagline
-                    length, so a one-line tagline doesn't leave its card
-                    shorter than its neighbors */}
+                {/* Reserves two lines so cards stay the same height. */}
                 <span
                   className={`min-h-[30px] text-[11px] leading-snug transition-colors duration-300 ${model.accent.text} opacity-80`}
                 >
