@@ -4,7 +4,7 @@ import { Check, MessagesSquare, PanelLeftClose, PanelLeftOpen, Pencil, Plus, Sea
 import type { Conversation } from "../../types/chat";
 import { glass } from "../ui/theme";
 import { BrandMark } from "../ui/BrandMark";
-import { getModelLabel } from "../ui/models";
+import { getModel, getModelLabel } from "../ui/models";
 import { DeleteConversationConfirm } from "../ui/DeleteConversationConfirm";
 import { HistoryModelFilter } from "../ui/HistoryModelFilter";
 
@@ -48,7 +48,11 @@ export function Sidebar({
   // touches storage, so clearing either one just re-includes everything
   // again on the next render.
   const visibleConversations = sortedConversations.filter((conversation) => {
-    if (modelFilter !== "all" && conversation.model !== modelFilter) return false;
+    // Resolved through getModel (not a raw string compare) so a
+    // conversation saved under a since-replaced model id -- e.g. "gemma"
+    // or "inkling", from before this slot became MiniMax M3 -- still
+    // matches its current filter.
+    if (modelFilter !== "all" && getModel(conversation.model)?.id !== modelFilter) return false;
     if (!normalizedQuery) return true;
     const titleMatches = conversation.title.toLowerCase().includes(normalizedQuery);
     const contentMatches = conversation.messages.some((message) =>

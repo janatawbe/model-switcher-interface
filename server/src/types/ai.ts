@@ -2,9 +2,22 @@
 // already uses (see src/components/ui/models.ts on the client side). The
 // backend owns the mapping from these to real OpenRouter model IDs; the
 // frontend never needs to know an OpenRouter ID exists.
-export type ModelId = "gemma" | "nemotron" | "laguna";
+export type ModelId = "minimax-m3" | "nemotron" | "laguna";
 
-export const MODEL_IDS: ModelId[] = ["gemma", "nemotron", "laguna"];
+export const MODEL_IDS: ModelId[] = ["minimax-m3", "nemotron", "laguna"];
+
+// This app id slot has had two earlier occupants -- "gemma" (replaced by
+// Inkling), then "inkling" (replaced by MiniMax M3) -- and a conversation
+// created during either era can still send a chat/title request carrying
+// its old id; nothing anywhere rewrites a user's already-persisted
+// localStorage data. Normalizing both aliases here (before validation, see
+// validation.ts) means an old conversation from either era keeps working
+// exactly as before instead of suddenly failing with UNSUPPORTED_MODEL.
+const LEGACY_MODEL_ID_ALIASES: Record<string, ModelId> = { gemma: "minimax-m3", inkling: "minimax-m3" };
+
+export function normalizeModelId(value: unknown): unknown {
+  return typeof value === "string" ? (LEGACY_MODEL_ID_ALIASES[value] ?? value) : value;
+}
 
 export function isModelId(value: unknown): value is ModelId {
   return typeof value === "string" && (MODEL_IDS as string[]).includes(value);

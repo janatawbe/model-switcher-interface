@@ -1,5 +1,5 @@
 import type { ReactElement } from "react";
-import { GemmaGlyph, NvidiaGlyph, PoolsideGlyph, type ModelGlyphProps } from "./ModelGlyphs";
+import { MiniMaxGlyph, NvidiaGlyph, PoolsideGlyph, type ModelGlyphProps } from "./ModelGlyphs";
 
 // The real, recognizable per-model mark (not a generic icon-library glyph),
 // used everywhere a model's identity is shown -- welcome cards, selector,
@@ -42,11 +42,14 @@ export type ModelOption = {
 
 export const MODELS: ModelOption[] = [
   {
-    id: "gemma",
-    label: "Gemma",
-    provider: "Google",
-    tagline: "Compact · Multilingual · Fast",
-    icon: GemmaGlyph,
+    id: "minimax-m3",
+    label: "MiniMax M3",
+    provider: "MiniMax",
+    tagline: "Multilingual · Efficient · Fast",
+    icon: MiniMaxGlyph,
+    // Identical accent/aurora values to the model this replaced (formerly
+    // Inkling, formerly Gemma before that) -- deliberately unchanged, not a
+    // new color pick.
     accent: {
       text: "text-blue-300",
       dot: "bg-blue-400",
@@ -58,9 +61,6 @@ export const MODELS: ModelOption[] = [
       glow: "shadow-[0_0_40px_-10px_rgba(66,133,244,0.5)]",
     },
     aurora: {
-      // Google blue, pushed a little brighter than the literal brand hex --
-      // blue reads quieter than violet/green at matched luminance, so it
-      // gets both a brightness nudge and a small idleWeight boost below.
       primary: [0.42, 0.62, 1.0],
       secondary: [0.18, 0.38, 0.88],
       highlight: [0.82, 0.9, 1.0],
@@ -118,8 +118,23 @@ export const MODELS: ModelOption[] = [
   },
 ];
 
+// This app id slot has had two earlier occupants -- "gemma" (replaced by
+// Inkling), then "inkling" (replaced by MiniMax M3) -- and conversations
+// already saved in a user's localStorage may still carry either old id.
+// Nothing here ever rewrites that persisted data; resolving both aliases
+// to "minimax-m3" at lookup time means old conversations from either era
+// keep rendering with the correct icon/label/color and keep working, with
+// zero migration.
+const LEGACY_MODEL_ID_ALIASES: Record<string, string> = { gemma: "minimax-m3", inkling: "minimax-m3" };
+
+function resolveModelId(modelId: string | null | undefined): string | null | undefined {
+  if (!modelId) return modelId;
+  return LEGACY_MODEL_ID_ALIASES[modelId] ?? modelId;
+}
+
 export function getModel(modelId: string | null | undefined): ModelOption | undefined {
-  return MODELS.find((model) => model.id === modelId);
+  const resolved = resolveModelId(modelId);
+  return MODELS.find((model) => model.id === resolved);
 }
 
 export function getModelLabel(modelId: string | null | undefined): string {
@@ -128,6 +143,7 @@ export function getModelLabel(modelId: string | null | undefined): string {
 }
 
 export function getModelIndex(modelId: string | null | undefined): number {
-  const index = MODELS.findIndex((model) => model.id === modelId);
+  const resolved = resolveModelId(modelId);
+  const index = MODELS.findIndex((model) => model.id === resolved);
   return index === -1 ? 0 : index;
 }

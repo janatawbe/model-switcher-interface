@@ -1,4 +1,4 @@
-import { ApiError, isModelId, type ChatMessage, type ChatRequest, type ModelId } from "./types/ai.js";
+import { ApiError, isModelId, normalizeModelId, type ChatMessage, type ChatRequest, type ModelId } from "./types/ai.js";
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -30,7 +30,8 @@ export function validateChatRequest(body: unknown): ChatRequest {
     throw new ApiError("INVALID_REQUEST", "Request body must be a JSON object.", 400);
   }
 
-  const { model, messages } = body;
+  const { messages } = body;
+  const model = normalizeModelId(body.model);
 
   if (typeof model !== "string" || model.length === 0) {
     throw new ApiError("INVALID_REQUEST", "Request must include a \"model\" string.", 400);
@@ -59,7 +60,8 @@ export function validateTitleRequest(body: unknown): TitleRequest {
     throw new ApiError("INVALID_REQUEST", "Request body must be a JSON object.", 400);
   }
 
-  const { model, userMessage, assistantMessage } = body;
+  const { userMessage, assistantMessage } = body;
+  const model = normalizeModelId(body.model);
 
   if (typeof model !== "string" || !isModelId(model)) {
     throw new ApiError("UNSUPPORTED_MODEL", `Model "${String(model)}" is not supported.`, 400);
