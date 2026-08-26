@@ -68,6 +68,31 @@ Requires Node.js and an [OpenRouter](https://openrouter.ai/) API key (a free acc
 
 4. Open `http://localhost:5173`, pick a model, and start chatting.
 
+## Run with Docker
+
+An alternative to the manual setup above — runs the whole app (frontend + backend) in two containers, no local Node install required.
+
+**Prerequisites:** [Docker](https://www.docker.com/) with Compose (Docker Desktop includes both).
+
+1. Add your API key (same file the manual setup uses):
+
+   ```bash
+   cp server/.env.example server/.env
+   # then edit server/.env and set OPENROUTER_API_KEY
+   ```
+
+2. Build and start both containers:
+
+   ```bash
+   docker compose up --build
+   ```
+
+3. Open **http://localhost:8080**.
+
+4. Stop the app with `Ctrl+C`, or `docker compose down` if it's running in the background.
+
+The API key is only ever read from `server/.env` at container start — it's never baked into an image or committed to the repo.
+
 ### Other scripts
 
 | Command (root) | Command (`server/`) | Does |
