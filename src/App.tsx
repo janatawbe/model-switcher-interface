@@ -14,6 +14,7 @@ type ChatApiErrorBody = {
 // Event shapes sent by /api/chat's streamed response.
 type ChatStreamEvent =
   | { type: "chunk"; content: string; model: string }
+  | { type: "status"; message: string }
   | { type: "done" }
   | { type: "error"; code?: string; message?: string; resetAt?: string };
 
@@ -74,6 +75,14 @@ function describeFailure(code: string | undefined, modelId: string, resetAt?: st
 const MAX_TITLE_LENGTH = 60;
 // Background title generation shouldn't hold things up as long as a real reply would.
 const TITLE_REQUEST_TIMEOUT_MS = 20000;
+// Floor so "Searching the web..." doesn't flash away instantly on a very fast search.
+const MIN_SEARCH_STATUS_VISIBLE_MS = 400;
+// How long to hold back ordinary text before we assume no web search is coming and
+// start streaming it live. If a "status" event arrives first (fast or slow), the
+// existing reset-on-status logic below discards it regardless of this timing.
+// Generous on purpose: some models write several sentences before deciding to
+// search, and a status event (not this timeout) is what resolves the common case.
+const PRE_SEARCH_BUFFER_TIMEOUT_MS = 3000;
 
 // Local, instant fallback title; stays if automatic title generation fails.
 function deriveFallbackTitle(rawContent: string): string {
@@ -128,6 +137,8 @@ function App() {
   const [draftModel, setDraftModel] = useState<string | null>(null);
   // Conversations with a request in flight, keyed by id.
   const [pendingConversationIds, setPendingConversationIds] = useState<Set<string>>(new Set());
+  // Waiting-indicator label per conversation (e.g. "Searching the web..."); defaults to "Thinking...".
+  const [waitingStatusByConversation, setWaitingStatusByConversation] = useState<Map<string, string>>(new Map());
   // Synchronous guard against double-sends before React re-renders.
   const sendGuardRef = useRef<Set<string>>(new Set());
   // Model picked mid-conversation, held until the user confirms the switch.
@@ -137,6 +148,7 @@ function App() {
   const selectedModel = activeConversation?.model ?? draftModel;
   const messages = activeConversation?.messages ?? [];
   const isTyping = activeConversationId !== null && pendingConversationIds.has(activeConversationId);
+  const waitingLabel = (activeConversationId && waitingStatusByConversation.get(activeConversationId)) || "Thinking...";
 
   // Saves conversations to localStorage, debounced to avoid writing on every streamed chunk.
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -224,6 +236,15 @@ function App() {
     // Set once the first chunk arrives, so a later error keeps partial content visible.
     let streamingMessageId: string | null = null;
     let accumulatedContent = "";
+    // When the "Searching the web..." status was shown, so it stays visible for a
+    // moment even if the final answer starts streaming almost immediately after.
+    let searchStatusShownAt: number | null = null;
+    // Holds text streamed before we know whether the model will call web_search, so a
+    // preamble (e.g. "Based on my training data...") never appears before "Searching
+    // the web..." does. Discarded on a status event; flushed live after a short wait.
+    let preSearchBuffer = "";
+    let preSearchBufferStartedAt: number | null = null;
+    let isBuffering = true;
 
     // Settles the message, then triggers title generation if this was the first reply.
     const settleWithRealReply = (targetConversationId: string, messageId: string) => {
@@ -279,6 +300,27 @@ function App() {
           }
 
           if (event.type === "chunk") {
+            if (isBuffering) {
+              if (preSearchBufferStartedAt === null) preSearchBufferStartedAt = Date.now();
+              if (Date.now() - preSearchBufferStartedAt < PRE_SEARCH_BUFFER_TIMEOUT_MS) {
+                preSearchBuffer += event.content;
+                continue; // held back until a status event or the timeout resolves it
+              }
+              // No status event within the wait -- treat this as a normal reply and
+              // start streaming what's buffered so far, live, from here on.
+              isBuffering = false;
+              accumulatedContent = preSearchBuffer;
+              preSearchBuffer = "";
+            }
+
+            // Keep "Searching the web..." visible for a moment rather than letting it
+            // flash away instantly if the answer starts streaming right behind it --
+            // whether that's the very first chunk, or the first chunk after a status
+            // event reset the bubble (see the "status" branch below).
+            if (accumulatedContent === "" && searchStatusShownAt !== null) {
+              const remaining = MIN_SEARCH_STATUS_VISIBLE_MS - (Date.now() - searchStatusShownAt);
+              if (remaining > 0) await new Promise((resolve) => setTimeout(resolve, remaining));
+            }
             accumulatedContent += event.content;
             if (streamingMessageId === null) {
               streamingMessageId = crypto.randomUUID();
@@ -294,10 +336,39 @@ function App() {
             } else {
               updateMessageContent(conversationId, streamingMessageId, accumulatedContent);
             }
+          } else if (event.type === "status") {
+            setWaitingStatusByConversation((prev) => new Map(prev).set(conversationId, event.message));
+            searchStatusShownAt = Date.now();
+            isBuffering = false;
+            preSearchBuffer = "";
+            preSearchBufferStartedAt = null;
+            // A model may stream a short preamble (e.g. "I'll search for that...") before
+            // deciding to search; once that happens the waiting indicator is already
+            // hidden behind that bubble, so show the status there instead of leaving
+            // stale preamble text up while the search runs.
+            if (streamingMessageId !== null) {
+              accumulatedContent = "";
+              updateMessageContent(conversationId, streamingMessageId, event.message);
+            }
           } else if (event.type === "error") {
             streamError = { code: event.code, message: event.message, resetAt: event.resetAt };
           }
         }
+      }
+
+      // The whole reply finished while still buffered (short, no search) -- show it now.
+      if (isBuffering && preSearchBuffer.length > 0 && streamingMessageId === null) {
+        accumulatedContent = preSearchBuffer;
+        streamingMessageId = crypto.randomUUID();
+        const streamingMessage: Message = {
+          id: streamingMessageId,
+          role: "assistant",
+          content: accumulatedContent,
+          model,
+          createdAt: new Date().toISOString(),
+          isStreaming: true,
+        };
+        appendToConversation(conversationId, [...history, streamingMessage]);
       }
 
       if (streamError) {
@@ -332,6 +403,12 @@ function App() {
     } finally {
       setPendingConversationIds((prev) => {
         const next = new Set(prev);
+        next.delete(conversationId);
+        return next;
+      });
+      setWaitingStatusByConversation((prev) => {
+        if (!prev.has(conversationId)) return prev;
+        const next = new Map(prev);
         next.delete(conversationId);
         return next;
       });
@@ -461,6 +538,7 @@ function App() {
       <ChatLayout
         messages={messages}
         isTyping={isTyping}
+        waitingLabel={waitingLabel}
         selectedModel={selectedModel}
         onSelectModel={requestModelSwitch}
         onNewChat={handleNewChat}
