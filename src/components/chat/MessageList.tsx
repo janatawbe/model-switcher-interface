@@ -1,4 +1,4 @@
-// Scrollable message history, including the "Thinking..." waiting indicator.
+// Scrollable message history, including the "Thinking..."/"Searching..." waiting indicator.
 import { useEffect, useRef } from "react";
 import { motion } from "motion/react";
 import type { Message } from "../../types/chat";
@@ -8,11 +8,13 @@ import { getModel } from "../ui/models";
 type MessageListProps = {
   messages: Message[];
   isTyping: boolean;
+  // Label shown in the waiting indicator, e.g. "Thinking..." or "Searching the web...".
+  waitingLabel: string;
   selectedModel: string | null;
   onRegenerateMessage: (messageId: string) => void;
 };
 
-export function MessageList({ messages, isTyping, selectedModel, onRegenerateMessage }: MessageListProps) {
+export function MessageList({ messages, isTyping, waitingLabel, selectedModel, onRegenerateMessage }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const model = getModel(selectedModel);
   const ModelIcon = model?.icon;
@@ -61,7 +63,7 @@ export function MessageList({ messages, isTyping, selectedModel, onRegenerateMes
                   animate={{ opacity: [0.55, 1, 0.55] }}
                   transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
                 >
-                  Thinking...
+                  {waitingLabel}
                 </motion.span>
               </div>
             </div>

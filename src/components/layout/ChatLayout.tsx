@@ -14,6 +14,8 @@ import { WelcomeScreen } from "./WelcomeScreen";
 type ChatLayoutProps = {
   messages: Message[];
   isTyping: boolean;
+  // Label shown in the waiting indicator, e.g. "Thinking..." or "Searching the web...".
+  waitingLabel: string;
   selectedModel: string | null;
   onSelectModel: (modelId: string) => void;
   onNewChat: () => void;
@@ -30,6 +32,7 @@ type ChatLayoutProps = {
 export function ChatLayout({
   messages,
   isTyping,
+  waitingLabel,
   selectedModel,
   onSelectModel,
   onNewChat,
@@ -108,6 +111,7 @@ export function ChatLayout({
                       <MessageList
                         messages={messages}
                         isTyping={isTyping}
+                        waitingLabel={waitingLabel}
                         selectedModel={selectedModel}
                         onRegenerateMessage={onRegenerateMessage}
                       />
